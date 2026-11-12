@@ -1,0 +1,756 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Espace élèves et parents</title>
+<script src="config.js"></script>
+<script src="supabase.js"></script>
+<script>window.supabase || document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.93.0/dist/umd/supabase.js"><\/script>')</script>
+<script>window.supabase || document.write('<script src="https://unpkg.com/@supabase/supabase-js@2.93.0/dist/umd/supabase.js"><\/script>')</script>
+<style>
+  :root {
+    --fond: #f2f5f6; --carte: #ffffff; --texte: #12212b; --discret: #566873; --bord: #d9e1e5;
+    --marque: #12364f; --sur-marque: #ffffff; --clair-marque: #b9cfdc;
+    --accent: #0b7a75; --accent-texte: #0a6a65; --doux: #e1f0ef;
+    --ambre: #fbefd9; --ambre-t: #8a4a00; --rouge: #fbe4e2; --rouge-t: #a11e17; --neutre: #e8edf1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fond: #0d1820; --carte: #14232e; --texte: #e6eef3; --discret: #9db0bc; --bord: #29404f;
+      --marque: #0a2233; --sur-marque: #e6eef3; --clair-marque: #9db0bc;
+      --accent: #4cc2bb; --accent-texte: #4cc2bb; --doux: #1a3340;
+      --ambre: #3a2c10; --ambre-t: #f0b04a; --rouge: #3d1f1d; --rouge-t: #f2a39d; --neutre: #1d313e;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--fond); color: var(--texte); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  #app { max-width: 560px; margin: 0 auto; min-height: 100vh; padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+  header.haut { background: var(--marque); color: var(--sur-marque); padding: 14px 20px 20px; padding-top: calc(14px + env(safe-area-inset-top, 0px)); }
+  header.haut .retour { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; color: var(--clair-marque); text-decoration: none; font-weight: 600; font-size: 14px; background: none; border: 0; padding: 0; font-family: inherit; cursor: pointer; }
+  header.haut h1 { margin: 2px 0 0; font-size: 26px; line-height: 1.15; }
+  header.haut .sous { margin-top: 6px; font-size: 14px; color: var(--clair-marque); }
+  .contenu { padding: 18px 20px; display: flex; flex-direction: column; gap: 16px; }
+  .carte { background: var(--carte); border: 1px solid var(--bord); border-radius: 14px; padding: 14px 16px; }
+  .carte h2 { margin: 0 0 8px; font-size: 18px; }
+  .info { color: var(--discret); font-size: 13.5px; margin: 4px 0 0; }
+  .vide { color: var(--discret); text-align: center; padding: 18px 8px; }
+  button, input, select { font: inherit; color: inherit; }
+  button.principal { width: 100%; min-height: 48px; border: 0; border-radius: 12px; background: var(--accent); color: #fff; font-weight: 700; cursor: pointer; }
+  @media (prefers-color-scheme: dark) { button.principal { color: #06191d; } }
+  button.second { min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1.5px solid var(--accent); background: var(--carte); color: var(--accent-texte); font-weight: 700; cursor: pointer; }
+  input[type=text], select { width: 100%; min-height: 48px; padding: 0 12px; border: 1px solid var(--bord); border-radius: 10px; background: var(--carte); }
+  .puces { display: flex; gap: 8px; flex-wrap: wrap; }
+  .puces button { min-height: 44px; padding: 0 14px; border-radius: 22px; border: 1px solid var(--bord); background: var(--carte); font-weight: 700; cursor: pointer; }
+  .puces button[aria-pressed="true"] { background: var(--marque); color: var(--sur-marque); border-color: var(--marque); }
+  .badge { display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 6px; background: var(--doux); color: var(--accent-texte); }
+  .badge.ambre { background: var(--ambre); color: var(--ambre-t); }
+  .badge.rouge { background: var(--rouge); color: var(--rouge-t); }
+  .badge.neutre { background: var(--neutre); color: var(--texte); }
+  .ligne { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--bord); }
+  .ligne:first-of-type { border-top: 0; }
+  .ligne .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .gras { font-weight: 700; }
+  .eleve { display: flex; gap: 14px; align-items: center; }
+  .avatar { flex: none; width: 56px; height: 56px; border-radius: 50%; background: var(--doux); color: var(--accent-texte); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 20px; }
+  .vitaux { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .vital { display: block; text-decoration: none; color: inherit; background: var(--carte); border: 1px solid var(--bord); border-radius: 14px; padding: 12px 14px; min-height: 92px; }
+  .vital b { display: block; font-size: 24px; line-height: 1.2; }
+  .vital span { display: block; font-size: 13px; color: var(--discret); }
+  .tuiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .tuile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 84px; padding: 8px 4px; border-radius: 14px; background: var(--carte); border: 1px solid var(--bord); text-decoration: none; color: var(--texte); font-size: 13.5px; font-weight: 600; text-align: center; }
+  svg.i { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  .tuile svg.i { color: var(--accent-texte); }
+  .piste { height: 10px; background: var(--doux); border-radius: 5px; overflow: hidden; }
+  .piste i { display: block; height: 100%; background: var(--accent); }
+  .piste.rouge i { background: #c0392b; }
+  .resume { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 8px; }
+  .resume div { background: var(--doux); border-radius: 10px; padding: 10px; }
+  .resume b { display: block; font-size: 20px; }
+  .resume span { font-size: 13px; color: var(--discret); }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 8px 4px; text-align: right; border-top: 1px solid var(--bord); }
+  th:first-child, td:first-child { text-align: left; }
+  thead th { border-top: 0; font-size: 13px; color: var(--discret); font-weight: 600; }
+  tfoot td { font-weight: 700; }
+  .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
+  .cal .e { font-size: 12px; color: var(--discret); font-weight: 600; padding: 4px 0; }
+  .cal .j { min-height: 40px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 13px; background: var(--fond); }
+  .cal .j.P { background: var(--doux); color: var(--accent-texte); font-weight: 700; }
+  .cal .j.A { background: var(--rouge); color: var(--rouge-t); font-weight: 700; }
+  .cal .j.R { background: var(--ambre); color: var(--ambre-t); font-weight: 700; }
+  .cal .j.we { opacity: .45; }
+  .cal .j small { font-size: 10.5px; line-height: 1; }
+  .date { flex: none; width: 56px; border-radius: 10px; background: var(--marque); color: var(--sur-marque); text-align: center; padding: 6px 0; }
+  .date b { display: block; font-size: 22px; line-height: 1.1; }
+  .date span { font-size: 12px; color: var(--clair-marque); }
+  .point { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); flex: none; }
+  details.msg { border-top: 1px solid var(--bord); padding: 4px 0; }
+  details.msg:first-of-type { border-top: 0; }
+  details.msg summary { display: flex; align-items: center; gap: 10px; min-height: 48px; cursor: pointer; list-style: none; }
+  details.msg summary::-webkit-details-marker { display: none; }
+  details.msg p { margin: 0 0 10px 20px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  nav.bas { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; background: var(--carte); border-top: 1px solid var(--bord); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  nav.bas div { max-width: 560px; margin: 0 auto; display: flex; }
+  nav.bas a { flex: 1; min-width: 0; min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 11.5px; text-decoration: none; color: var(--discret); font-weight: 500; }
+  nav.bas a[aria-current="page"] { color: var(--accent-texte); font-weight: 700; box-shadow: inset 0 3px 0 var(--accent); }
+  #msg { position: fixed; left: 16px; right: 16px; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); z-index: 9; max-width: 520px; margin: 0 auto; background: var(--marque); color: var(--sur-marque); padding: 12px 14px; border-radius: 10px; }
+  #msg[hidden] { display: none; }
+  #impression { display: none; }
+  @media print {
+    #app, #msg { display: none !important; }
+    #impression.actif { display: block; color: #000; background: #fff; font-family: Georgia, serif; padding: 24px; }
+    #impression h1 { text-align: center; }
+    #impression table { font-size: 14px; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="impression"></div>
+<div id="msg" role="status" hidden></div>
+
+<script>
+"use strict";
+const CLE = "espace-ecole-v1";
+const PERIODES = ["1re période", "2e période", "3e période", "4e période"];
+const JOURS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"];
+const MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+const SEUIL = 50;
+const ICONES = {
+  accueil: "M3 11l9-8 9 8M5 10v10h14V10M10 20v-6h4v6",
+  notes: "M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h7",
+  presences: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M9 15l2 2 4-4",
+  messages: "M4 4h16v12H8l-4 4z",
+  frais: "M3 7h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 7l2-3h12M16 14h2",
+  devoirs: "M5 4h14v16H5zM9 9h6M9 13h6M9 17h3",
+  horaire: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2",
+  calendrier: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4",
+  documents: "M4 6h6l2 2h8v11H4z"
+};
+const TITRES = { accueil: "Accueil", notes: "Notes et bulletin", presences: "Présences", messages: "Messages de l'école", frais: "Frais scolaires",
+  devoirs: "Devoirs", horaire: "Horaire des cours", calendrier: "Calendrier scolaire", documents: "Documents" };
+const ONGLETS = ["accueil", "notes", "presences", "messages", "frais"];
+const LIBELLES = { accueil: "Accueil", notes: "Notes", presences: "Présences", messages: "Messages", frais: "Frais" };
+
+// ---------- Données ----------
+let S = charger();
+function charger() {
+  const v = { base: null, source: "", local: false, matricule: "", lus: [], faits: [], demandes: [] };
+  try {
+    const s = JSON.parse(localStorage.getItem(CLE));
+    if (s && typeof s === "object") {
+      if (s.base && Array.isArray(s.base.eleves)) v.base = s.base;
+      v.matricule = typeof s.matricule === "string" ? s.matricule : "";
+      v.source = s.source === "admin" ? "admin" : "";
+      v.local = s.local === true;
+      for (const k of ["lus", "faits", "demandes"]) if (Array.isArray(s[k])) v[k] = s[k];
+    }
+  } catch (e) {}
+  return v;
+}
+const CLE_NUAGE = "espace-ecole-nuage-v1";
+function sauver() {
+  if (nuage) { try { localStorage.setItem(CLE_NUAGE, JSON.stringify({ matricule: S.matricule })); } catch (e) {} return; }
+  try { localStorage.setItem(CLE, JSON.stringify(S.source === "admin" ? { ...S, base: null } : S)); } catch (e) { dire("Sauvegarde impossible sur ce téléphone."); } }
+
+// Si l'administration est ouverte depuis le même dossier et le même navigateur, on lit ses données en direct.
+const CLE_ADMIN = "ecole-eleves-v1";
+function lireAdmin() {
+  try { const d = JSON.parse(localStorage.getItem(CLE_ADMIN)); if (d && Array.isArray(d.eleves) && d.eleves.length) { d.espace = d.espace || {}; return d; } } catch (e) {}
+  return null;
+}
+const B = () => S.base;
+const EX = () => (S.base && S.base.espace) || {};
+const liste = (t) => (S.base && Array.isArray(S.base[t]) ? S.base[t] : []);
+const listeEx = (t) => (Array.isArray(EX()[t]) ? EX()[t] : []);
+const norm = (t) => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+const eleveActuel = () => liste("eleves").find((x) => norm(x.matricule) === norm(S.matricule));
+const classeDe = (x) => liste("classes").find((c) => norm(c.nom) === norm(x.classe));
+const nomComplet = (x) => [x.nom, x.postnom, x.prenom].filter(Boolean).join(" ");
+const fmt = (v) => String(Math.round(v * 10) / 10).replace(".", ",");
+const iso = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+const aujourdhui = () => iso(new Date());
+const dateLongue = (s) => { const d = new Date(s + "T12:00:00"); if (isNaN(d)) return String(s); return ["Dimanche", ...JOURS, "Samedi"][d.getDay()] + " " + d.getDate() + " " + MOIS[d.getMonth()]; };
+const anneeScolaire = () => { const d = new Date(), y = d.getFullYear(); return d.getMonth() >= 8 ? y + "-" + (y + 1) : (y - 1) + "-" + y; };
+
+// ---------- Petits outils d'interface ----------
+let minuteur;
+function dire(t) { const m = document.getElementById("msg"); m.textContent = t; m.hidden = false; clearTimeout(minuteur); minuteur = setTimeout(() => { m.hidden = true; }, 3000); }
+function el(tag, cls, txt) { const n = document.createElement(tag); if (cls) n.className = cls; if (txt != null) n.textContent = txt; return n; }
+function icone(nom) {
+  const NS = "http://www.w3.org/2000/svg";
+  const s = document.createElementNS(NS, "svg"); s.setAttribute("viewBox", "0 0 24 24"); s.setAttribute("class", "i"); s.setAttribute("aria-hidden", "true");
+  const p = document.createElementNS(NS, "path"); p.setAttribute("d", ICONES[nom]); s.appendChild(p); return s;
+}
+function bouton(txt, cls, fn) { const b = el("button", cls, txt); b.type = "button"; b.addEventListener("click", fn); return b; }
+function carte(titre) { const c = el("section", "carte"); if (titre) c.appendChild(el("h2", "", titre)); return c; }
+function puces(options, actuel, choisir, libelle) {
+  const g = el("div", "puces"); g.setAttribute("role", "group"); g.setAttribute("aria-label", libelle);
+  for (const [v, t] of options) {
+    const b = bouton(t, "", () => choisir(v)); b.setAttribute("aria-pressed", String(v === actuel)); g.appendChild(b);
+  }
+  return g;
+}
+
+// ---------- Calculs de notes ----------
+const maxMat = (m) => (m.max > 0 ? m.max : 20);
+function matieresDe(x) { const c = classeDe(x); return c ? liste("matieres").filter((m) => m.classeId === c.id).sort((a, b) => a.nom.localeCompare(b.nom, "fr")) : []; }
+function noteDe(x, m, p) { const n = (S.base.notes || {})[x.id + "|" + m.id + "|" + p]; return typeof n === "number" ? n : null; }
+function resultat(x, mats, p) {
+  let t = 0, mx = 0, n = 0;
+  for (const m of mats) { const v = noteDe(x, m, p); if (v == null) continue; t += v; mx += maxMat(m); n++; }
+  return { t, mx, n, pct: mx > 0 ? (t / mx) * 100 : null };
+}
+function classement(x, p) {
+  if (nuage) { const c = ((nuage.classements || {})[x.id] || {})[p]; return c ? { place: c.place, sur: c.sur, moyenne: c.moyenne == null ? null : Number(c.moyenne) } : { place: null, sur: 0, moyenne: null }; }
+  const mats = matieresDe(x);
+  const camarades = liste("eleves").filter((y) => y.classe === x.classe);
+  const rs = camarades.map((y) => ({ y, ...resultat(y, mats, p) })).filter((r) => r.pct != null).sort((a, b) => b.pct - a.pct);
+  const moi = rs.find((r) => r.y.id === x.id);
+  return { place: moi ? 1 + rs.filter((r) => r.pct > moi.pct + 1e-9).length : null, sur: rs.length, moyenne: rs.length ? rs.reduce((s, r) => s + r.pct, 0) / rs.length : null };
+}
+function dernierePeriode(x) {
+  const mats = matieresDe(x);
+  for (let p = PERIODES.length - 1; p >= 0; p--) if (resultat(x, mats, p).n) return p;
+  return 0;
+}
+function presenceStats(x) {
+  const r = listeEx("presences").filter((p) => p.eleveId === x.id);
+  const P = r.filter((p) => p.statut === "P").length, R = r.filter((p) => p.statut === "R").length, A = r.filter((p) => p.statut === "A").length;
+  return { P, R, A, total: P + R + A, pct: P + R + A ? ((P + R) / (P + R + A)) * 100 : null };
+}
+function fraisDe(x) {
+  const f = (EX().frais || {})[x.id]; if (!f) return null;
+  const paye = (f.paiements || []).reduce((s, p) => s + (Number(p.montant) || 0), 0);
+  return { total: Number(f.total) || 0, paye, reste: Math.max(0, (Number(f.total) || 0) - paye), echeance: f.echeance || "", paiements: f.paiements || [] };
+}
+function messagesDe(x) {
+  const c = classeDe(x);
+  return listeEx("messages").filter((m) => !m.cible || m.cible === x.id || (c && m.cible === c.id)).sort((a, b) => String(b.date).localeCompare(String(a.date)));
+}
+function devoirsDe(x) { const c = classeDe(x); return listeEx("devoirs").filter((d) => c && d.classeId === c.id).sort((a, b) => String(a.pour).localeCompare(String(b.pour))); }
+function evenements(x) {
+  const c = classeDe(x);
+  return listeEx("calendrier").filter((e) => !e.classeId || (c && e.classeId === c.id)).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+}
+
+// ---------- Navigation ----------
+const pageActuelle = () => { const h = location.hash.slice(1); return TITRES[h] ? h : "accueil"; };
+window.addEventListener("hashchange", () => { rendre(); window.scrollTo(0, 0); });
+
+function entete(page, x) {
+  const h = el("header", "haut");
+  if (page !== "accueil") {
+    const a = el("a", "retour"); a.href = "#accueil";
+    const s = icone("accueil"); s.style.width = "18px"; s.style.height = "18px"; a.append(s, document.createTextNode("Accueil")); h.appendChild(a);
+  }
+  h.appendChild(el(page === "accueil" ? "div" : "div", "sous", (B().ecole && B().ecole.nom) || "Mon école"));
+  h.appendChild(el("h1", "", page === "accueil" ? "Bonjour, " + (x.prenom || x.nom) : TITRES[page]));
+  h.appendChild(el("div", "sous", nomComplet(x) + " · " + x.classe));
+  return h;
+}
+function barre(page) {
+  const n = el("nav", "bas"); n.setAttribute("aria-label", "Navigation principale");
+  const d = el("div");
+  for (const o of ONGLETS) {
+    const a = el("a"); a.href = "#" + o; a.append(icone(o), el("span", "", LIBELLES[o]));
+    if (o === page) a.setAttribute("aria-current", "page");
+    d.appendChild(a);
+  }
+  n.appendChild(d); return n;
+}
+
+function rendre() {
+  const app = document.getElementById("app"); app.replaceChildren();
+  if (S.source === "admin") { const a = lireAdmin(); if (a) S.base = a; else { S.source = ""; S.base = null; } }
+  if (nuage && nuage.etat !== "pret") return ecranNuage(app);
+  if (!S.base) return ecranDonnees(app);
+  const x = eleveActuel();
+  if (!x) return ecranConnexion(app);
+  const page = pageActuelle();
+  app.appendChild(entete(page, x));
+  const c = el("main", "contenu"); app.appendChild(c);
+  ({ accueil: pAccueil, notes: pNotes, presences: pPresences, messages: pMessages, frais: pFrais, devoirs: pDevoirs, horaire: pHoraire, calendrier: pCalendrier, documents: pDocuments })[page](c, x);
+  app.appendChild(barre(page));
+}
+
+// ---------- Écran 0 : données et connexion ----------
+function ecranDonnees(app) {
+  const c = el("main", "contenu"); c.style.paddingTop = "48px";
+  c.appendChild(el("h1", "", "Espace élèves et parents"));
+  if (CFG && CFG.url && window.supabase) {
+    const w = carte("Base de données en ligne");
+    w.appendChild(el("p", "info", "Connecte-toi avec ton compte pour voir les informations de ton enfant."));
+    const bw = bouton("Me connecter", "principal", () => { S.local = false; S.base = null; S.source = ""; sauver(); demarrerNuage(); });
+    bw.style.marginTop = "10px"; w.appendChild(bw); c.appendChild(w);
+  }
+  const k = carte("Charger les données de l'école");
+  k.appendChild(el("p", "info", "Dans l'application d'administration, va dans Réglages et exporte la sauvegarde (JSON). Choisis ensuite ce fichier ici."));
+  const f = el("input"); f.type = "file"; f.accept = ".json,application/json"; f.setAttribute("aria-label", "Fichier de sauvegarde de l'école"); f.style.margin = "10px 0";
+  f.addEventListener("change", () => {
+    const fic = f.files[0]; if (!fic) return;
+    const l = new FileReader();
+    l.onload = () => {
+      try { const d = JSON.parse(l.result); if (!d || !Array.isArray(d.eleves)) throw new Error("format"); S.source = ""; S.base = d; S.matricule = ""; sauver(); rendre(); }
+      catch (e) { dire("Fichier non reconnu."); }
+    };
+    l.readAsText(fic);
+  });
+  k.appendChild(f);
+  c.appendChild(k);
+  if (lireAdmin()) {
+    const a = carte("Utiliser les données de l'administration");
+    a.appendChild(el("p", "info", "L'application d'administration est déjà utilisée sur ce téléphone. Les données se mettent à jour toutes seules."));
+    const ba = bouton("Utiliser ces données", "principal", () => { S.source = "admin"; S.base = lireAdmin(); S.matricule = ""; sauver(); rendre(); });
+    ba.style.marginTop = "10px"; a.appendChild(ba); c.appendChild(a);
+  }
+  const e = carte("Pas encore de données ?");
+  e.appendChild(el("p", "info", "Essaie l'espace avec une école d'exemple (noms et montants inventés)."));
+  const b = bouton("Essayer avec des données d'exemple", "principal", () => { S.source = ""; S.base = donneesExemple(); S.matricule = "E2026-001"; sauver(); location.hash = "#accueil"; rendre(); });
+  b.style.marginTop = "10px"; e.appendChild(b);
+  c.appendChild(e);
+  c.appendChild(el("p", "info", "Cette version fonctionne sans serveur : il n'y a pas encore de vrais comptes ni de mot de passe. Les comptes sécurisés viendront avec la base de données."));
+  app.appendChild(c);
+}
+
+function ecranConnexion(app) {
+  if (nuage) return ecranChoixEnfant(app);
+  const c = el("main", "contenu"); c.style.paddingTop = "48px";
+  c.appendChild(el("h1", "", (B().ecole && B().ecole.nom) || "Espace élèves et parents"));
+  const k = carte("Entrer avec le matricule");
+  k.appendChild(el("p", "info", "Écris le matricule de l'élève (exemple : E2026-001). Il est sur sa fiche dans l'application d'administration."));
+  const champ = el("input"); champ.type = "text"; champ.autocapitalize = "characters"; champ.autocomplete = "off"; champ.setAttribute("aria-label", "Matricule"); champ.style.margin = "10px 0";
+  champ.value = S.matricule || "";
+  const aller = () => {
+    S.matricule = champ.value.trim(); if (!eleveActuel()) { dire("Matricule introuvable."); return; }
+    sauver(); location.hash = "#accueil"; rendre();
+  };
+  champ.addEventListener("keydown", (e) => { if (e.key === "Enter") aller(); });
+  k.append(champ, bouton("Entrer", "principal", aller));
+  c.appendChild(k);
+  c.appendChild(bouton("Changer les données de l'école", "second", () => { S.base = null; S.source = ""; S.matricule = ""; sauver(); rendre(); }));
+  app.appendChild(c);
+}
+
+// ---------- Écran 1 : Accueil ----------
+function pAccueil(c, x) {
+  const t = carte(); const e = el("div", "eleve");
+  const ini = ((x.prenom || "")[0] || "") + ((x.nom || "")[0] || "");
+  const av = el("div", "avatar", ini.toUpperCase()); av.setAttribute("aria-hidden", "true");
+  const tx = el("div"); tx.append(el("div", "gras", nomComplet(x)), el("div", "info", x.classe + " · " + x.matricule + " · " + anneeScolaire()));
+  e.append(av, tx); t.appendChild(e); c.appendChild(t);
+
+  const p = dernierePeriode(x), r = resultat(x, matieresDe(x), p), cl = classement(x, p);
+  const pr = presenceStats(x), fr = fraisDe(x), nonLus = messagesDe(x).filter((m) => !S.lus.includes(m.id)).length;
+  const prochainDevoir = devoirsDe(x).find((d) => d.pour >= aujourdhui() && !S.faits.includes(d.id));
+  const vital = (page, valeur, lib, note) => { const a = el("a", "vital"); a.href = "#" + page; a.append(el("b", "", valeur), el("span", "", lib)); if (note) a.appendChild(el("span", "", note)); return a; };
+  const v = el("div", "vitaux");
+  v.append(
+    vital("notes", r.pct == null ? "—" : fmt(r.pct) + " %", "Moyenne · " + PERIODES[p], cl.place ? "Place : " + cl.place + " / " + cl.sur : "Pas encore de notes"),
+    vital("presences", pr.pct == null ? "—" : Math.round(pr.pct) + " %", "Présence", pr.total ? pr.A + " absence(s)" : "Pas de relevé"),
+    vital("frais", fr ? fmt(fr.reste) + " $" : "—", "Reste à payer", fr && fr.echeance && fr.reste > 0 ? "Avant le " + dateLongue(fr.echeance) : (fr ? "À jour" : "Pas de données")),
+    vital("messages", String(nonLus), nonLus > 1 ? "Messages non lus" : "Message non lu", ""));
+  c.appendChild(v);
+
+  const k = carte("À venir");
+  if (prochainDevoir) k.appendChild(ligneInfo("Devoir · " + prochainDevoir.matiere, prochainDevoir.titre + " (" + dateLongue(prochainDevoir.pour) + ")"));
+  const ev = evenements(x).find((y) => y.date >= aujourdhui());
+  if (ev) k.appendChild(ligneInfo("Calendrier", ev.titre + " (" + dateLongue(ev.date) + ")"));
+  if (!prochainDevoir && !ev) k.appendChild(el("p", "vide", "Rien de prévu pour le moment."));
+  c.appendChild(k);
+
+  const g = el("div", "tuiles");
+  for (const o of ["devoirs", "horaire", "calendrier", "documents"]) { const a = el("a", "tuile"); a.href = "#" + o; a.append(icone(o), el("span", "", TITRES[o].replace(" de l'école", "").replace(" et bulletin", ""))); g.appendChild(a); }
+  c.appendChild(g);
+  if (nuage) {
+    if (liste("eleves").length > 1) c.appendChild(bouton("Changer d'élève", "second", () => { S.matricule = ""; sauver(); rendre(); }));
+    c.appendChild(bouton("Rattacher un autre élève", "second", () => { nuage.etat = "rattacher"; nuage.msg = ""; rendre(); }));
+    c.appendChild(bouton("Se déconnecter", "second", deconnecter));
+  } else c.appendChild(bouton("Changer d'élève", "second", () => { S.matricule = ""; sauver(); rendre(); }));
+}
+function ligneInfo(t, d) { const l = el("div", "ligne"); const g = el("div", "grow"); g.append(el("div", "gras", t), el("div", "info", d)); l.appendChild(g); return l; }
+
+// ---------- Écran 2 : Notes ----------
+let periodeVue = null;
+function pNotes(c, x) {
+  const mats = matieresDe(x);
+  if (periodeVue == null) periodeVue = dernierePeriode(x);
+  c.appendChild(puces(PERIODES.map((n, i) => [i, n.replace(" période", "")]), periodeVue, (i) => { periodeVue = i; rendre(); }, "Période"));
+  const r = resultat(x, mats, periodeVue), cl = classement(x, periodeVue);
+  const k = carte(PERIODES[periodeVue]);
+  if (!mats.length) { k.appendChild(el("p", "vide", "Les matières de cette classe ne sont pas encore enregistrées.")); c.appendChild(k); return; }
+  const rs = el("div", "resume");
+  const cs = (v, l) => { const d = el("div"); d.append(el("b", "", v), el("span", "", l)); return d; };
+  rs.append(cs(r.pct == null ? "—" : fmt(r.pct) + " %", "Pourcentage"), cs(cl.place ? cl.place + " / " + cl.sur : "—", "Place"),
+    cs(r.n ? fmt(r.t) + " / " + fmt(r.mx) : "—", "Total"), cs(cl.moyenne == null ? "—" : fmt(cl.moyenne) + " %", "Moyenne de la classe"));
+  k.appendChild(rs);
+  const tb = el("table"); const th = el("thead"), l0 = el("tr");
+  for (const h of ["Matière", "Note", "Sur"]) { const e = el("th", "", h); e.scope = "col"; l0.appendChild(e); }
+  th.appendChild(l0); tb.appendChild(th);
+  const corps = el("tbody");
+  for (const m of mats) { const v = noteDe(x, m, periodeVue); const tr = el("tr"); tr.append(el("td", "", m.nom), el("td", "gras", v == null ? "—" : fmt(v)), el("td", "", fmt(maxMat(m)))); corps.appendChild(tr); }
+  tb.appendChild(corps); k.appendChild(tb);
+  if (r.pct != null) { const barreP = el("div", "piste" + (r.pct < SEUIL ? " rouge" : "")); barreP.style.marginTop = "12px"; const i = el("i"); i.style.width = Math.min(100, r.pct) + "%"; barreP.appendChild(i); k.appendChild(barreP);
+    k.appendChild(el("p", "info", r.pct >= SEUIL ? "Au-dessus du seuil de réussite (" + SEUIL + " %)." : "En dessous du seuil de réussite (" + SEUIL + " %).")); }
+  if (r.n < mats.length) k.appendChild(el("p", "info", (mats.length - r.n) + " matière(s) sans note pour le moment."));
+  k.appendChild(bouton("Imprimer le bulletin", "second", () => imprimerBulletin(x, periodeVue))).style.marginTop = "12px";
+  c.appendChild(k);
+}
+
+// ---------- Écran 3 : Présences ----------
+function pPresences(c, x) {
+  const d = new Date(), an = d.getFullYear(), mo = d.getMonth();
+  const k = carte(MOIS[mo][0].toUpperCase() + MOIS[mo].slice(1) + " " + an);
+  const rel = {}; for (const p of listeEx("presences")) if (p.eleveId === x.id) rel[p.date] = p.statut;
+  const g = el("div", "cal"); g.setAttribute("role", "table");
+  for (const j of ["L", "M", "M", "J", "V", "S", "D"]) g.appendChild(el("div", "e", j));
+  const decal = (new Date(an, mo, 1).getDay() + 6) % 7;
+  for (let i = 0; i < decal; i++) g.appendChild(el("div"));
+  const nb = new Date(an, mo + 1, 0).getDate();
+  for (let n = 1; n <= nb; n++) {
+    const jd = new Date(an, mo, n), s = rel[iso(jd)], we = jd.getDay() === 0 || jd.getDay() === 6;
+    const cell = el("div", "j" + (s ? " " + s : "") + (we ? " we" : ""));
+    cell.appendChild(el("span", "", String(n)));
+    if (s) { cell.appendChild(el("small", "", s === "P" ? "Présent" : s === "A" ? "Absent" : "Retard")); cell.setAttribute("aria-label", n + " " + MOIS[mo] + " : " + (s === "P" ? "présent" : s === "A" ? "absent" : "en retard")); }
+    g.appendChild(cell);
+  }
+  k.appendChild(g); c.appendChild(k);
+  const st = presenceStats(x); const b = carte("Depuis le début de l'année");
+  if (!st.total) b.appendChild(el("p", "vide", "Aucun relevé de présence pour le moment."));
+  else {
+    const rs = el("div", "resume"); const cs = (v, l) => { const e = el("div"); e.append(el("b", "", v), el("span", "", l)); return e; };
+    rs.append(cs(Math.round(st.pct) + " %", "Présence"), cs(String(st.A), "Absence(s)"), cs(String(st.R), "Retard(s)"), cs(String(st.P), "Jour(s) présent(s)"));
+    b.appendChild(rs);
+  }
+  c.appendChild(b);
+}
+
+// ---------- Écran 4 : Messages ----------
+function pMessages(c, x) {
+  const k = carte(); const ms = messagesDe(x);
+  if (!ms.length) { k.appendChild(el("p", "vide", "Aucun message pour le moment.")); c.appendChild(k); return; }
+  for (const m of ms) {
+    const dt = el("details", "msg"); const sm = el("summary");
+    const lu = S.lus.includes(m.id);
+    const pt = el("span", "point"); if (lu) pt.style.visibility = "hidden";
+    const g = el("div", "grow"); g.append(el("div", lu ? "" : "gras", m.titre), el("div", "info", (m.de || "École") + " · " + dateLongue(String(m.date))));
+    sm.append(pt, g); dt.append(sm, el("p", "", m.texte));
+    dt.addEventListener("toggle", () => { if (dt.open && !S.lus.includes(m.id)) { S.lus.push(m.id); sauver(); if (nuage) ecrire(sb.from("lus").upsert({ user_id: nuage.user.id, message_id: m.id }, { onConflict: "user_id,message_id" })); pt.style.visibility = "hidden"; g.firstChild.className = ""; } });
+    k.appendChild(dt);
+  }
+  c.appendChild(k);
+}
+
+// ---------- Écran 5 : Frais ----------
+function pFrais(c, x) {
+  const f = fraisDe(x);
+  if (!f) { const k = carte(); k.appendChild(el("p", "vide", "Les frais de cet élève ne sont pas encore enregistrés.")); c.appendChild(k); return; }
+  const k = carte("Année " + anneeScolaire());
+  const rs = el("div", "resume"); const cs = (v, l) => { const e = el("div"); e.append(el("b", "", v), el("span", "", l)); return e; };
+  rs.append(cs(fmt(f.total) + " $", "Total"), cs(fmt(f.paye) + " $", "Déjà payé"));
+  k.appendChild(rs);
+  const pc = f.total ? Math.min(100, (f.paye / f.total) * 100) : 0; const bp = el("div", "piste"); const i = el("i"); i.style.width = pc + "%"; bp.appendChild(i); k.appendChild(bp);
+  k.appendChild(el("p", "info", f.reste > 0 ? "Reste à payer : " + fmt(f.reste) + " $" + (f.echeance ? " avant le " + dateLongue(f.echeance) : "") : "Tout est payé. Merci !"));
+  c.appendChild(k);
+  const h = carte("Paiements reçus");
+  if (!f.paiements.length) h.appendChild(el("p", "vide", "Aucun paiement enregistré."));
+  for (const p of [...f.paiements].sort((a, b) => String(b.date).localeCompare(String(a.date)))) {
+    const l = el("div", "ligne"); const g = el("div", "grow"); g.append(el("div", "gras", fmt(Number(p.montant)) + " $"), el("div", "info", dateLongue(p.date) + (p.recu ? " · reçu n° " + p.recu : "")));
+    l.append(g, el("span", "badge", "Payé")); h.appendChild(l);
+  }
+  c.appendChild(h);
+}
+
+// ---------- Écran 6 : Devoirs ----------
+let filtreDevoirs = "faire";
+function pDevoirs(c, x) {
+  const tous = devoirsDe(x);
+  const aFaire = tous.filter((d) => !S.faits.includes(d.id)), faits = tous.filter((d) => S.faits.includes(d.id));
+  c.appendChild(puces([["faire", "À faire (" + aFaire.length + ")"], ["faits", "Faits (" + faits.length + ")"]], filtreDevoirs, (v) => { filtreDevoirs = v; rendre(); }, "Filtrer les devoirs"));
+  const liste_ = filtreDevoirs === "faire" ? aFaire : faits;
+  if (!liste_.length) { const k = carte(); k.appendChild(el("p", "vide", filtreDevoirs === "faire" ? "Aucun devoir à faire. Bravo !" : "Aucun devoir terminé pour le moment.")); c.appendChild(k); return; }
+  for (const d of liste_) {
+    const k = carte(); const hte = el("div", "ligne"); hte.style.borderTop = "0"; hte.style.padding = "0";
+    const jours = Math.round((new Date(d.pour + "T12:00:00") - new Date(aujourdhui() + "T12:00:00")) / 86400000);
+    hte.append(el("span", "badge neutre", d.matiere), el("span", "badge" + (jours <= 2 && filtreDevoirs === "faire" ? " ambre" : ""), jours < 0 ? "En retard" : jours === 0 ? "Aujourd'hui" : jours === 1 ? "Demain" : "Dans " + jours + " jours"));
+    hte.style.justifyContent = "space-between";
+    k.append(hte, el("div", "gras", d.titre), el("div", "info", "Pour " + dateLongue(d.pour) + (d.prof ? " · " + d.prof : "")));
+    const b = bouton(filtreDevoirs === "faire" ? "Marquer comme fait" : "Remettre à faire", "second", () => {
+      if (S.faits.includes(d.id)) { S.faits = S.faits.filter((i) => i !== d.id); if (nuage) ecrire(sb.from("devoirs_faits").delete().match({ user_id: nuage.user.id, devoir_id: d.id })); }
+      else { S.faits.push(d.id); if (nuage) ecrire(sb.from("devoirs_faits").upsert({ user_id: nuage.user.id, devoir_id: d.id }, { onConflict: "user_id,devoir_id" })); }
+      sauver(); rendre();
+    });
+    b.style.width = "100%"; b.style.marginTop = "10px"; b.setAttribute("aria-label", b.textContent + " : " + d.titre); k.appendChild(b);
+    c.appendChild(k);
+  }
+}
+
+// ---------- Écran 7 : Horaire ----------
+let jourVu = null;
+function pHoraire(c, x) {
+  const cl = classeDe(x); const h = (EX().horaire || {})[cl && cl.id];
+  if (jourVu == null) { const j = (new Date().getDay() + 6) % 7; jourVu = j < 5 ? j : 0; }
+  c.appendChild(puces(JOURS.map((n, i) => [i, n.slice(0, 3)]), jourVu, (i) => { jourVu = i; rendre(); }, "Jour de la semaine"));
+  const k = carte(JOURS[jourVu]);
+  const cours = h && Array.isArray(h[jourVu]) ? h[jourVu] : [];
+  if (!cours.length) k.appendChild(el("p", "vide", h ? "Pas de cours ce jour-là." : "L'horaire de la classe n'est pas encore enregistré."));
+  const maint = new Date(); const hm = String(maint.getHours()).padStart(2, "0") + ":" + String(maint.getMinutes()).padStart(2, "0");
+  const estAuj = jourVu === (maint.getDay() + 6) % 7;
+  for (const co of cours) {
+    const l = el("div", "ligne"); const t = el("div", "gras"); t.style.width = "56px"; t.style.fontSize = "13px"; t.style.fontVariantNumeric = "tabular-nums"; t.textContent = co.debut; const f = el("div", "info", co.fin); f.style.margin = "0"; const bloc = el("div"); bloc.style.width = "56px"; bloc.append(t, f);
+    const g = el("div", "grow"); g.append(el("div", co.pause ? "info" : "gras", co.matiere), el("div", "info", [co.salle, co.prof].filter(Boolean).join(" · ")));
+    l.append(bloc, g);
+    if (estAuj && !co.pause && hm >= co.debut && hm < co.fin) l.appendChild(el("span", "badge", "En cours"));
+    k.appendChild(l);
+  }
+  c.appendChild(k);
+}
+
+// ---------- Écran 8 : Calendrier ----------
+let filtreCal = "tout";
+const TYPES = { examen: ["Examens", "rouge"], reunion: ["Réunions", ""], conge: ["Congés", "neutre"], sortie: ["Sorties", ""], frais: ["Frais", "ambre"] };
+function pCalendrier(c, x) {
+  c.appendChild(puces([["tout", "Tout"], ["examen", "Examens"], ["reunion", "Réunions"], ["conge", "Congés"]], filtreCal, (v) => { filtreCal = v; rendre(); }, "Filtrer les événements"));
+  const evs = evenements(x).filter((e) => e.date >= aujourdhui() && (filtreCal === "tout" || e.type === filtreCal));
+  if (!evs.length) { const k = carte(); k.appendChild(el("p", "vide", "Aucun événement à venir.")); c.appendChild(k); return; }
+  for (const e of evs) {
+    const k = carte(); k.style.display = "flex"; k.style.gap = "14px";
+    const d = new Date(e.date + "T12:00:00"); const bl = el("div", "date"); bl.append(el("b", "", String(d.getDate())), el("span", "", ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."][d.getMonth()]));
+    const g = el("div"); g.style.minWidth = "0";
+    const ty = TYPES[e.type] || ["Autre", "neutre"];
+    g.append(el("span", "badge " + ty[1], ty[0]), el("div", "gras", e.titre), el("div", "info", [dateLongue(e.date), e.detail].filter(Boolean).join(" · ")));
+    k.append(bl, g); c.appendChild(k);
+  }
+}
+
+// ---------- Écran 9 : Documents ----------
+function imprimer(noeuds) {
+  const z = document.getElementById("impression"); z.replaceChildren(...noeuds); z.classList.add("actif");
+  setTimeout(() => { window.print(); z.classList.remove("actif"); }, 50);
+}
+function imprimerBulletin(x, p) {
+  const mats = matieresDe(x), r = resultat(x, mats, p), cl = classement(x, p);
+  const t = el("table"); const th = el("thead"), l = el("tr"); for (const h of ["Matière", "Note", "Sur"]) l.appendChild(el("th", "", h)); th.appendChild(l); t.appendChild(th);
+  const tb = el("tbody"); for (const m of mats) { const v = noteDe(x, m, p); const tr = el("tr"); tr.append(el("td", "", m.nom), el("td", "", v == null ? "—" : fmt(v)), el("td", "", fmt(maxMat(m)))); tb.appendChild(tr); } t.appendChild(tb);
+  imprimer([el("h1", "", (B().ecole && B().ecole.nom) || "École"), el("h2", "", "Bulletin · " + PERIODES[p] + " · " + anneeScolaire()),
+    el("p", "", nomComplet(x) + " · matricule " + x.matricule + " · " + x.classe), t,
+    el("p", "", r.pct == null ? "Aucune note saisie." : "Total : " + fmt(r.t) + " / " + fmt(r.mx) + " · " + fmt(r.pct) + " %" + (cl.place ? " · place " + cl.place + " / " + cl.sur : "")),
+    el("p", "", "Document informatif, non signé. Le bulletin officiel est remis par l'école.")]);
+}
+function imprimerAttestation(x, titre, verbe) {
+  imprimer([el("h1", "", (B().ecole && B().ecole.nom) || "École"), el("h2", "", titre),
+    el("p", "", "Le chef d'établissement atteste que l'élève " + nomComplet(x) + ", matricule " + x.matricule + ", " + verbe + " " + x.classe + " pour l'année scolaire " + anneeScolaire() + "."),
+    el("p", "", "Fait à ____________________, le " + new Date().toLocaleDateString("fr-FR") + "."),
+    el("p", "", "Signature et cachet : ____________________"),
+    el("p", "", "Document à faire signer et cacheter par l'école pour être valable.")]);
+}
+function pDocuments(c, x) {
+  const k = carte("Mes documents");
+  const docs = [
+    ["Bulletin · " + PERIODES[dernierePeriode(x)], "Généré à partir des notes", () => imprimerBulletin(x, dernierePeriode(x))],
+    ["Attestation de fréquentation", "À faire signer par l'école", () => imprimerAttestation(x, "Attestation de fréquentation", "fréquente régulièrement")],
+    ["Certificat de scolarité", "À faire signer par l'école", () => imprimerAttestation(x, "Certificat de scolarité", "est régulièrement inscrit(e) en")]
+  ];
+  for (const [t, d, fn] of docs) {
+    const l = el("div", "ligne"); const g = el("div", "grow"); g.append(el("div", "gras", t), el("div", "info", d));
+    const b = bouton("PDF", "second", fn); b.style.minWidth = "64px"; b.setAttribute("aria-label", "Imprimer ou enregistrer en PDF : " + t);
+    l.append(g, b); k.appendChild(l);
+  }
+  c.appendChild(k);
+  const dm = carte("Demander un document");
+  const sel = el("select"); sel.setAttribute("aria-label", "Document demandé");
+  for (const t of ["Duplicata du bulletin", "Attestation de réussite", "Relevé de notes", "Autre document"]) sel.appendChild(new Option(t, t));
+  dm.append(sel, bouton("Envoyer la demande", "principal", () => {
+    const dem = { eleveId: x.id, titre: sel.value, date: aujourdhui() };
+    S.demandes.push(dem); sauver();
+    if (nuage) { ecrire(sb.from("demandes").insert({ user_id: nuage.user.id, eleve_id: x.id, titre: dem.titre, date: dem.date })); dire("Demande envoyée au secrétariat."); }
+    else dire("Demande enregistrée sur ce téléphone.");
+    rendre();
+  }));
+  dm.lastChild.style.marginTop = "10px";
+  dm.appendChild(el("p", "info", "Sans connexion à la base, la demande reste sur ce téléphone."));
+  c.appendChild(dm);
+  const mine = S.demandes.filter((d) => d.eleveId === x.id);
+  if (mine.length) {
+    const e = carte("Demandes en cours");
+    for (const d of mine.slice().reverse()) { const l = el("div", "ligne"); const g = el("div", "grow"); g.append(el("div", "gras", d.titre), el("div", "info", "Demandé le " + dateLongue(d.date))); l.append(g, el("span", "badge ambre", "Envoyée")); e.appendChild(l); }
+    c.appendChild(e);
+  }
+}
+
+// ---------- Données d'exemple (noms et montants inventés) ----------
+function donneesExemple() {
+  const jr = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return iso(d); };
+  const eleves = [
+    ["a1", "E2026-001", "KABEYA", "Mukendi", "Jean", "M"], ["a2", "E2026-002", "ILUNGA", "Tshala", "Marie", "F"],
+    ["a3", "E2026-003", "BANZA", "Kalala", "Paul", "M"], ["a4", "E2026-004", "NGALULA", "Mbuyi", "Grâce", "F"]
+  ].map(([id, matricule, nom, postnom, prenom, sexe]) => ({ id, matricule, nom, postnom, prenom, sexe, classe: "3e humanités" }));
+  const mats = [["m1", "Mathématiques", 20], ["m2", "Français", 20], ["m3", "Physique", 20], ["m4", "Anglais", 10], ["m5", "Histoire", 10]].map(([id, nom, max]) => ({ id, classeId: "c1", nom, max }));
+  const notes = {};
+  const base = { a1: [14, 12, 15, 7, 6], a2: [17, 16, 14, 9, 8], a3: [10, 13, 11, 6, 7], a4: [15, 14, 16, 8, 7] };
+  for (const e of eleves) mats.forEach((m, i) => { notes[e.id + "|" + m.id + "|0"] = base[e.id][i]; });
+  const presences = []; const auj = new Date();
+  for (let n = 1; n < auj.getDate(); n++) { const d = new Date(auj.getFullYear(), auj.getMonth(), n); if (d.getDay() === 0 || d.getDay() === 6) continue; presences.push({ eleveId: "a1", date: iso(d), statut: n === 5 ? "A" : n === 9 ? "R" : "P" }); }
+  const cours = (a) => a.map(([debut, fin, matiere, salle, prof, pause]) => ({ debut, fin, matiere, salle, prof, pause }));
+  const jour = cours([["07:30", "08:20", "Mathématiques", "Salle 4", "M. Mukendi"], ["08:30", "09:20", "Français", "Salle 4", "Mme Ngalula"], ["09:30", "10:20", "Physique", "Laboratoire", "M. Kasongo"], ["10:20", "10:40", "Récréation", "", "", true], ["10:40", "11:30", "Anglais", "Salle 4", "Mme Tshiala"], ["11:30", "12:20", "Histoire", "Salle 4", "M. Lukusa"]]);
+  return {
+    ecole: { nom: "Complexe scolaire (exemple)" }, eleves, classes: [{ id: "c1", nom: "3e humanités" }], enseignants: [], matieres: mats, notes,
+    espace: {
+      presences,
+      messages: [
+        { id: "g1", date: jr(-1), de: "Direction", titre: "Réunion des parents", texte: "Chers parents,\nLa réunion de la classe aura lieu samedi à 9 h dans la salle polyvalente. Votre présence est importante.", cible: "" },
+        { id: "g2", date: jr(-4), de: "Secrétariat", titre: "Rappel : 3e tranche", texte: "Merci de régler la 3e tranche des frais avant la date limite indiquée dans la rubrique Frais.", cible: "" }
+      ],
+      frais: { a1: { total: 360, echeance: jr(19), paiements: [{ date: jr(-60), montant: 120, recu: "0018" }, { date: jr(-35), montant: 120, recu: "0027" }, { date: jr(-12), montant: 75, recu: "0042" }] } },
+      devoirs: [
+        { id: "d1", classeId: "c1", matiere: "Mathématiques", titre: "Exercices 4 à 9, page 42", pour: jr(2), prof: "M. Mukendi" },
+        { id: "d2", classeId: "c1", matiere: "Français", titre: "Rédaction : « Mon quartier », une page", pour: jr(3), prof: "Mme Ngalula" },
+        { id: "d3", classeId: "c1", matiere: "Physique", titre: "Compte rendu du TP sur les circuits", pour: jr(3), prof: "M. Kasongo" }
+      ],
+      horaire: { c1: [jour, jour, jour, jour, jour] },
+      calendrier: [
+        { date: jr(9), type: "sortie", titre: "Sortie pédagogique", detail: "Jardin botanique, départ à 8 h" },
+        { date: jr(11), type: "reunion", titre: "Réunion des parents", detail: "9 h, salle polyvalente" },
+        { date: jr(19), type: "frais", titre: "Date limite de la 3e tranche", detail: "45 $ restants" },
+        { date: jr(27), type: "examen", titre: "Début des compositions", detail: "Dès 7 h" },
+        { date: jr(38), type: "conge", titre: "Vacances de fin d'année", detail: "Reprise en janvier" }
+      ]
+    }
+  };
+}
+
+// ---------- Base de données en ligne (Supabase) ----------
+const CFG = window.SB_CONFIG;
+let sb = null, nuage = null;
+const TABLES_NUAGE = ["ecole", "eleves", "classes", "matieres", "notes", "presences", "frais", "paiements", "devoirs", "messages", "horaire", "calendrier"];
+function msgErr(e) {
+  const t = String((e && e.message) || e || "");
+  if (/Failed to fetch|NetworkError|Load failed/i.test(t)) return "Pas de connexion Internet.";
+  if (/Invalid login/i.test(t)) return "Email ou mot de passe incorrect.";
+  if (/already registered|already been registered/i.test(t)) return "Un compte existe déjà avec cet email. Connecte-toi.";
+  if (/Password should be at least|weak/i.test(t)) return "Le mot de passe est trop court (6 caractères minimum).";
+  if (/Email not confirmed/i.test(t)) return "Confirme d'abord ton email avec le lien reçu.";
+  return t.slice(0, 140);
+}
+async function ecrire(promesse) { try { const r = await promesse; if (r && r.error) throw r.error; } catch (e) { dire("Enregistrement impossible : " + msgErr(e)); } }
+
+async function demarrerNuage() {
+  if (S.local || !CFG || !CFG.url || !CFG.key) { rendre(); return; }
+  if (!window.supabase) { S.local = true; rendre(); dire("Mode sans base : la bibliothèque en ligne n'a pas pu être chargée."); return; }
+  try { const m = JSON.parse(localStorage.getItem(CLE_NUAGE)); S.matricule = m && typeof m.matricule === "string" ? m.matricule : ""; } catch (e) { S.matricule = ""; }
+  S.base = null; S.source = ""; S.lus = []; S.faits = []; S.demandes = [];
+  sb = sb || window.supabase.createClient(CFG.url, CFG.key, { auth: { persistSession: true, autoRefreshToken: true } });
+  nuage = { etat: "attente", user: null, msg: "", mode: "connexion", classements: {} }; rendre();
+  try {
+    const { data, error } = await sb.auth.getSession(); if (error) throw error;
+    if (!data.session) { nuage.etat = "connexion"; rendre(); return; }
+    nuage.user = data.session.user; await chargerNuage();
+  } catch (e) { nuage.etat = "erreur"; nuage.msg = msgErr(e); rendre(); }
+}
+
+async function lireNuage(t) { const { data, error } = await sb.from(t).select("*"); if (error) throw error; return data || []; }
+function baseDepuis(T) {
+  const e0 = T.ecole[0] || {};
+  const b = { ecole: { nom: e0.nom || "" }, eleves: [], classes: [], enseignants: [], matieres: [], notes: {}, espace: { presences: [], messages: [], devoirs: [], calendrier: [], frais: {}, horaire: {} } };
+  b.classes = T.classes.map((c) => ({ id: c.id, nom: c.nom }));
+  const nomClasse = new Map(b.classes.map((c) => [c.id, c.nom]));
+  b.matieres = T.matieres.map((m) => ({ id: m.id, classeId: m.classe_id, nom: m.nom, max: Number(m.maximum) }));
+  b.eleves = T.eleves.map((x) => ({ id: x.id, matricule: x.matricule, nom: x.nom, postnom: x.postnom || "", prenom: x.prenom, sexe: x.sexe, classe: nomClasse.get(x.classe_id) || "" }));
+  for (const n of T.notes) b.notes[n.eleve_id + "|" + n.matiere_id + "|" + n.periode] = Number(n.valeur);
+  b.espace.presences = T.presences.map((p) => ({ eleveId: p.eleve_id, date: String(p.date).slice(0, 10), statut: p.statut }));
+  for (const f of T.frais) b.espace.frais[f.eleve_id] = { total: Number(f.total), echeance: f.echeance || "", paiements: [] };
+  for (const p of T.paiements) { const f = b.espace.frais[p.eleve_id]; if (f) f.paiements.push({ date: p.date, montant: Number(p.montant), recu: p.recu }); }
+  b.espace.devoirs = T.devoirs.map((x) => ({ id: x.id, classeId: x.classe_id, matiere: x.matiere, titre: x.titre, pour: x.pour, prof: x.prof || "" }));
+  b.espace.messages = T.messages.map((m) => ({ id: m.id, date: m.date, de: m.de, titre: m.titre, texte: m.texte, cible: m.cible || "" }));
+  for (const h of [...T.horaire].sort((a, c) => String(a.debut).localeCompare(String(c.debut)))) (b.espace.horaire[h.classe_id] = b.espace.horaire[h.classe_id] || [[], [], [], [], []])[h.jour].push({ debut: h.debut, fin: h.fin, matiere: h.matiere, salle: h.salle || "", prof: h.prof || "", pause: !!h.pause });
+  b.espace.calendrier = T.calendrier.map((e) => ({ id: e.id, date: e.date, type: e.type, titre: e.titre, detail: e.detail || "", classeId: e.classe_id || "" }));
+  return b;
+}
+async function chargerNuage() {
+  const { data: liens, error } = await sb.from("parents_eleves").select("eleve_id"); if (error) throw error;
+  if (!liens.length) { nuage.etat = "rattacher"; nuage.msg = ""; rendre(); return; }
+  nuage.etat = "attente"; rendre();
+  const T = {}; for (const t of TABLES_NUAGE) T[t] = await lireNuage(t);
+  S.base = baseDepuis(T);
+  S.lus = (await lireNuage("lus")).map((r) => r.message_id);
+  S.faits = (await lireNuage("devoirs_faits")).map((r) => r.devoir_id);
+  S.demandes = (await lireNuage("demandes")).map((r) => ({ eleveId: r.eleve_id, titre: r.titre, date: String(r.date).slice(0, 10) }));
+  nuage.classements = {};
+  for (const x of S.base.eleves) {
+    nuage.classements[x.id] = {};
+    for (let p = 0; p < PERIODES.length; p++) { if (!Object.keys(S.base.notes).some((k) => k.startsWith(x.id + "|") && k.endsWith("|" + p))) continue; const { data, error: er } = await sb.rpc("classement_eleve", { p_eleve: x.id, p_periode: p }); if (!er && data && data[0]) nuage.classements[x.id][p] = data[0]; }
+  }
+  if (!eleveActuel() && S.base.eleves.length === 1) S.matricule = S.base.eleves[0].matricule;
+  nuage.etat = "pret"; sauver(); rendre();
+}
+async function deconnecter() { try { await sb.auth.signOut(); } catch (e) {} S.base = null; S.matricule = ""; nuage = { etat: "connexion", user: null, msg: "", mode: "connexion", classements: {} }; try { localStorage.removeItem(CLE_NUAGE); } catch (e) {} location.hash = "#accueil"; rendre(); }
+
+function ecranNuage(app) {
+  const c = el("main", "contenu"); c.style.paddingTop = "48px";
+  c.appendChild(el("h1", "", "Espace élèves et parents"));
+  if (nuage.etat === "attente") { c.appendChild(el("p", "vide", "Chargement…")); app.appendChild(c); return; }
+  if (nuage.etat === "erreur") {
+    const k = carte("Connexion impossible"); k.appendChild(el("p", "info", nuage.msg));
+    const b = bouton("Réessayer", "principal", () => demarrerNuage()); b.style.marginTop = "10px"; k.appendChild(b); c.appendChild(k);
+    c.appendChild(bouton("Utiliser l'espace sans connexion", "second", () => { S.local = true; nuage = null; sauver(); S.base = null; rendre(); }));
+    app.appendChild(c); return;
+  }
+  if (nuage.etat === "rattacher") {
+    const k = carte("Rattacher un élève");
+    k.appendChild(el("p", "info", "Écris le matricule de ton enfant et le code d'accès remis par l'école. Tu ne le fais qu'une fois par enfant."));
+    const m = el("input"); m.type = "text"; m.autocapitalize = "characters"; m.autocomplete = "off"; m.setAttribute("aria-label", "Matricule"); m.placeholder = "Matricule (E2026-001)";
+    const cd = el("input"); cd.type = "text"; cd.autocapitalize = "characters"; cd.autocomplete = "off"; cd.setAttribute("aria-label", "Code d'accès"); cd.placeholder = "Code d'accès";
+    m.style.margin = "10px 0 8px"; cd.style.marginBottom = "10px";
+    const err = el("p", "info", nuage.msg || ""); err.setAttribute("role", "alert");
+    const ok = bouton("Rattacher", "principal", async () => {
+      ok.disabled = true; err.textContent = "Vérification…";
+      const { error } = await sb.rpc("rattacher", { p_matricule: m.value, p_code: cd.value });
+      if (error) { ok.disabled = false; err.textContent = /incorrect/i.test(error.message) ? "Matricule ou code incorrect." : msgErr(error); return; }
+      try { await chargerNuage(); } catch (e) { nuage.etat = "erreur"; nuage.msg = msgErr(e); rendre(); }
+    });
+    k.append(m, cd, err, ok); c.appendChild(k);
+    if (S.base) c.appendChild(bouton("Retour", "second", () => { nuage.etat = "pret"; rendre(); }));
+    c.appendChild(bouton("Se déconnecter", "second", deconnecter));
+    app.appendChild(c); return;
+  }
+  // connexion / création de compte
+  const creer = nuage.mode === "creer";
+  const k = carte(creer ? "Créer un compte" : "Connexion");
+  k.appendChild(puces([["connexion", "Connexion"], ["creer", "Créer un compte"]], nuage.mode, (v) => { nuage.mode = v; nuage.msg = ""; rendre(); }, "Choix"));
+  const em = el("input"); em.type = "email"; em.autocomplete = "username"; em.setAttribute("aria-label", "Email"); em.placeholder = "Email";
+  const mdp = el("input"); mdp.type = "password"; mdp.autocomplete = creer ? "new-password" : "current-password"; mdp.setAttribute("aria-label", "Mot de passe"); mdp.placeholder = creer ? "Mot de passe (6 caractères minimum)" : "Mot de passe";
+  em.style.margin = "12px 0 8px"; mdp.style.marginBottom = "10px";
+  const err = el("p", "info", nuage.msg || ""); err.setAttribute("role", "alert");
+  const ok = bouton(creer ? "Créer mon compte" : "Se connecter", "principal", async () => {
+    if (!em.value.trim() || !mdp.value) { err.textContent = "Écris ton email et ton mot de passe."; return; }
+    ok.disabled = true; err.textContent = "Un instant…";
+    try {
+      const r = creer ? await sb.auth.signUp({ email: em.value.trim(), password: mdp.value }) : await sb.auth.signInWithPassword({ email: em.value.trim(), password: mdp.value });
+      if (r.error) { ok.disabled = false; err.textContent = msgErr(r.error); return; }
+      if (!r.data.session) { ok.disabled = false; err.textContent = "Compte créé. Confirme ton email avec le lien reçu, puis connecte-toi."; nuage.mode = "connexion"; return; }
+      nuage.user = r.data.session.user; await chargerNuage();
+    } catch (e) { ok.disabled = false; err.textContent = msgErr(e); }
+  });
+  mdp.addEventListener("keydown", (e) => { if (e.key === "Enter") ok.click(); });
+  k.append(em, mdp, err, ok); c.appendChild(k);
+  c.appendChild(bouton("Essayer avec des données d'exemple", "second", () => { S.local = true; nuage = null; S.source = ""; S.base = donneesExemple(); S.matricule = "E2026-001"; sauver(); location.hash = "#accueil"; rendre(); }));
+  app.appendChild(c);
+}
+function ecranChoixEnfant(app) {
+  const c = el("main", "contenu"); c.style.paddingTop = "48px";
+  c.appendChild(el("h1", "", (S.base.ecole && S.base.ecole.nom) || "Espace élèves et parents"));
+  const k = carte("Quel élève ?");
+  for (const x of liste("eleves")) { const b = bouton(nomComplet(x) + " · " + x.classe, "second", () => { S.matricule = x.matricule; sauver(); location.hash = "#accueil"; rendre(); }); b.style.width = "100%"; b.style.marginTop = "8px"; k.appendChild(b); }
+  c.appendChild(k);
+  c.appendChild(bouton("Rattacher un autre élève", "second", () => { nuage.etat = "rattacher"; nuage.msg = ""; rendre(); }));
+  c.appendChild(bouton("Se déconnecter", "second", deconnecter));
+  app.appendChild(c);
+}
+
+window.addEventListener("error", (e) => { const m = document.getElementById("msg"); m.textContent = "Erreur : " + e.message; m.hidden = false; });
+demarrerNuage();
+</script>
+</body>
+</html>

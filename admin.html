@@ -1,0 +1,1931 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gestion école</title>
+<script src="config.js"></script>
+<script src="supabase.js"></script>
+<script>window.supabase || document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.93.0/dist/umd/supabase.js"><\/script>')</script>
+<script>window.supabase || document.write('<script src="https://unpkg.com/@supabase/supabase-js@2.93.0/dist/umd/supabase.js"><\/script>')</script>
+<style>
+  /* Toutes les couleurs sont définies ici, une seule fois, puis réutilisées partout. */
+  :root {
+    --fond: #f1f4f7; --carte: #ffffff; --texte: #14212b; --discret: #5a6b78; --bord: #d9e1e7;
+    --marque: #12364f; --sur-marque: #ffffff;
+    --accent: #0b7a75; --sur-accent: #ffffff; --doux: #e3eef0;
+    --danger: #b3261e; --alerte: #a65f00; --ok: #2e7d4f;
+    --g: #2f6fb0; --f: #d98e1f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fond: #0d1820; --carte: #14232e; --texte: #e6eef3; --discret: #94a8b5; --bord: #29404f;
+      --marque: #0a2233; --sur-marque: #e6eef3;
+      --accent: #4cc2bb; --sur-accent: #06191d; --doux: #1a3340;
+      --danger: #f2a39d; --alerte: #f0b04a; --ok: #7fd09d;
+      --g: #6aa8e6; --f: #f0b04a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fond); color: var(--texte); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  h1, h2, h3 { margin: 0; letter-spacing: -.01em; }
+  h2 { font-size: 17px; margin-bottom: 12px; }
+  h3 { font-size: 12px; margin: 14px 0 4px; color: var(--discret); text-transform: uppercase; letter-spacing: .08em; }
+  a { color: var(--accent); }
+  .discret { color: var(--discret); }
+
+  /* ----- Bandeau de l'école ----- */
+  .marque { background: var(--marque); color: var(--sur-marque); padding: 18px 16px 20px; padding-top: calc(18px + env(safe-area-inset-top, 0px)); }
+  .marque-in { max-width: 960px; margin: 0 auto; display: flex; align-items: center; gap: 14px; }
+  .logo { flex: none; width: 48px; height: 48px; border-radius: 10px; background: var(--sur-marque); color: var(--marque); display: grid; place-items: center; font-weight: 800; font-size: 20px; letter-spacing: .02em; }
+  .ecole-nom { font-size: 22px; font-weight: 800; line-height: 1.2; overflow-wrap: anywhere; }
+  .annee { font-size: 13px; opacity: .8; font-variant-numeric: tabular-nums; }
+
+  .page { max-width: 960px; margin: 0 auto; padding: 16px 16px 110px; }
+  .titre-page { font-size: 24px; margin: 0 0 14px; }
+
+  /* ----- Navigation du bas ----- */
+  nav.bas { position: fixed; left: 0; right: 0; bottom: 0; z-index: 4; display: flex; background: var(--carte); border-top: 1px solid var(--bord); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  nav.bas a { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 9px 1px 8px; font-size: 10.5px; color: var(--discret); text-decoration: none; min-width: 0; }
+  nav.bas a[aria-current="page"] { color: var(--accent); font-weight: 700; box-shadow: inset 0 3px 0 var(--accent); }
+  nav.bas svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ----- Cartes, formulaires, boutons ----- */
+  .carte { background: var(--carte); border: 1px solid var(--bord); border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+  form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .plein { grid-column: 1 / -1; }
+  label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--discret); }
+  input, select { font: inherit; font-size: 16px; padding: 10px; border: 1px solid var(--bord); border-radius: 8px; background: var(--fond); color: var(--texte); min-width: 0; }
+  input:focus, select:focus, button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button { font: inherit; font-weight: 600; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--accent); background: transparent; color: var(--accent); cursor: pointer; }
+  button.principal { background: var(--accent); color: var(--sur-accent); }
+  button.danger { border-color: var(--danger); color: var(--danger); }
+  button.petit { padding: 6px 10px; font-size: 14px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .outils { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .vide { color: var(--discret); text-align: center; padding: 20px 8px; margin: 0; }
+
+  /* ----- Tableau de bord ----- */
+  .kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 14px; }
+  .kpi { background: var(--carte); border: 1px solid var(--bord); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+  .kpi .n { font-size: 32px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .kpi .l { font-size: 13px; color: var(--discret); text-transform: uppercase; letter-spacing: .06em; }
+  .kpi .h { font-size: 13px; color: var(--discret); margin-top: 2px; }
+  .grille { display: grid; grid-template-columns: 1fr; gap: 14px; }
+  .grille > .carte { margin-bottom: 0; min-width: 0; }
+
+  .demarrage ol { list-style: none; margin: 0; padding: 0; counter-reset: etape; }
+  .demarrage li { counter-increment: etape; display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--bord); }
+  .demarrage li:first-child { border-top: 0; }
+  .demarrage li::before { content: counter(etape); flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--doux); color: var(--accent); font-weight: 700; }
+  .demarrage li.fait::before { content: "✓"; background: var(--ok); color: var(--carte); }
+  .demarrage li.fait .t { color: var(--discret); text-decoration: line-through; }
+  .demarrage .t { flex: 1; min-width: 0; }
+
+  .barres { display: flex; flex-direction: column; gap: 10px; }
+  .barre { display: grid; grid-template-columns: minmax(70px, 28%) 1fr auto; gap: 10px; align-items: center; font-size: 14px; }
+  .barre .nom { overflow-wrap: anywhere; }
+  .piste { display: flex; height: 18px; background: var(--doux); border-radius: 4px; overflow: hidden; }
+  .seg-g { background: var(--g); } .seg-f { background: var(--f); }
+  .barre .v { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 22px; text-align: right; }
+  .legende { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 12px; font-size: 13px; color: var(--discret); }
+  .legende i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+
+  .donut-bloc { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+  svg.donut { width: 140px; height: 140px; flex: none; }
+  svg.donut circle { fill: none; stroke-width: 16; }
+  svg.donut .fond { stroke: var(--doux); } svg.donut .seg-g { stroke: var(--g); } svg.donut .seg-f { stroke: var(--f); }
+  svg.donut .d-n { fill: var(--texte); font: 800 26px system-ui, sans-serif; }
+  svg.donut .d-l { fill: var(--discret); font: 12px system-ui, sans-serif; }
+  .donut-legende { display: flex; flex-direction: column; gap: 8px; font-size: 15px; }
+  .donut-legende b { font-variant-numeric: tabular-nums; }
+
+  .ages { display: flex; align-items: flex-end; gap: 6px; height: 150px; overflow-x: auto; padding-top: 4px; }
+  .age { flex: 1 0 26px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 4px; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .age .col { width: 100%; max-width: 44px; background: var(--accent); border-radius: 4px 4px 0 0; min-height: 3px; }
+  .age span:last-child { color: var(--discret); }
+  .note-age { margin: 8px 0 0; font-size: 13px; color: var(--discret); }
+
+  ul.alertes { list-style: none; margin: 0; padding: 0; }
+  ul.alertes li { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--bord); }
+  ul.alertes li:first-child { border-top: 0; }
+  ul.alertes .pastille { flex: none; min-width: 26px; height: 26px; padding: 0 6px; border-radius: 13px; display: grid; place-items: center; background: var(--alerte); color: var(--carte); font-weight: 700; font-size: 13px; }
+  ul.alertes .ok { background: var(--ok); }
+  ul.alertes .t { flex: 1; min-width: 0; }
+
+  /* ----- Élèves, classes, enseignants ----- */
+  .cartes { display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 14px; }
+  .cartes > .carte { margin-bottom: 0; min-width: 0; }
+  .fiche { display: flex; gap: 12px; align-items: flex-start; }
+  .avatar { flex: none; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 16px; letter-spacing: .02em; }
+  .corps { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .entete { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .nom { font-weight: 700; font-size: 17px; overflow-wrap: anywhere; }
+  .info { color: var(--discret); font-size: 14px; overflow-wrap: anywhere; }
+  .matricule { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: 12.5px; color: var(--accent); background: var(--doux); padding: 2px 8px; border-radius: 4px; }
+  .corps .actions { margin-top: 8px; }
+  .puce { background: var(--doux); color: var(--accent); border-radius: 4px; padding: 2px 8px; font-size: 13px; font-family: ui-monospace, Menlo, monospace; }
+  ul.matieres { list-style: none; margin: 0; padding: 0; }
+  ul.matieres li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 0; border-top: 1px solid var(--bord); }
+  ul.matieres li:first-child { border-top: 0; }
+  ul.matieres .m-texte { flex: 1; min-width: 140px; overflow-wrap: anywhere; }
+  .copier { display: flex; gap: 8px; margin-top: 10px; }
+  .copier select { flex: 1; }
+
+  #message { position: fixed; left: 16px; right: 16px; bottom: calc(86px + env(safe-area-inset-bottom, 0px)); max-width: 480px; margin: 0 auto; background: var(--texte); color: var(--fond); padding: 12px 14px; border-radius: 8px; text-align: center; z-index: 6; }
+  [hidden] { display: none !important; }
+
+  @media (min-width: 720px) {
+    .kpis { grid-template-columns: repeat(4, 1fr); }
+    .grille { grid-template-columns: 1fr 1fr; }
+    .grille .large { grid-column: 1 / -1; }
+    .cartes { grid-template-columns: 1fr 1fr; }
+  }
+  .onglets { display: flex; gap: 8px; margin-top: 10px; }
+  .onglets button { flex: 1; min-height: 44px; border-radius: 8px; border: 1px solid var(--bord); background: var(--carte); color: var(--texte); font: inherit; font-weight: 600; cursor: pointer; }
+  .onglets button[aria-pressed="true"] { background: var(--marque); color: var(--sur-marque); border-color: var(--marque); }
+  .saisie { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--bord); }
+  .saisie:first-child { border-top: 0; }
+  .saisie .qui { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .saisie input { width: 84px; min-height: 44px; text-align: right; }
+  .saisie .sur { color: var(--discret); min-width: 34px; }
+  .saisie input.faux { border-color: var(--danger); }
+  table.bulletin { width: 100%; border-collapse: collapse; font-size: 15px; }
+  table.bulletin th, table.bulletin td { padding: 8px 6px; border-top: 1px solid var(--bord); text-align: right; }
+  table.bulletin th:first-child, table.bulletin td:first-child { text-align: left; }
+  table.bulletin thead th { border-top: 0; color: var(--discret); font-size: 13px; font-weight: 600; }
+  table.bulletin tfoot td { font-weight: 700; }
+  .resume-notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-bottom: 12px; }
+  .resume-notes div { background: var(--doux); border-radius: 8px; padding: 10px; }
+  .resume-notes b { display: block; font-size: 20px; }
+  .resume-notes span { font-size: 13px; color: var(--discret); }
+  .rang { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--bord); }
+  .rang:first-child { border-top: 0; }
+  .rang .n { width: 30px; font-weight: 700; color: var(--discret); }
+  .rang .piste { flex: 1; height: 8px; background: var(--doux); border-radius: 4px; overflow: hidden; }
+  .rang .piste i { display: block; height: 100%; background: var(--accent); }
+  .rang .pct { width: 56px; text-align: right; font-weight: 700; }
+  #connexion { position: fixed; inset: 0; z-index: 20; background: var(--fond); display: flex; align-items: center; justify-content: center; padding: 20px; }
+  #connexion[hidden] { display: none; }
+  #connexion form { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 380px; background: var(--carte); border: 1px solid var(--bord); border-radius: 12px; padding: 20px; }
+  #connexion h2 { margin: 0; }
+  #cx-erreur { margin: 0; color: var(--danger); min-height: 1.3em; font-size: 14px; }
+  .nuage-etat { margin-left: auto; font-size: 12.5px; text-align: right; max-width: 45%; opacity: .9; }
+  .nuage-etat.alerte { color: #ffd9a0; }
+  .saisie.col { flex-wrap: wrap; }
+  .saisie.col .qui { flex-basis: 100%; }
+  .saisie.col .onglets { flex: 1; margin: 0; }
+  .vie-onglets button { flex: 1 1 30%; }
+  .vie-liste { margin-top: 14px; }
+  .vie-liste .ligne { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--bord); }
+  .vie-liste .ligne:first-child { border-top: 0; }
+  .vie-liste .ligne .corps { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .vie-liste .passe { opacity: .55; }
+  textarea { font: inherit; font-size: 16px; padding: 10px; border: 1px solid var(--bord); border-radius: 8px; background: var(--fond); color: var(--texte); min-width: 0; min-height: 90px; resize: vertical; }
+  .vie-form { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+  @media print { header.marque, nav.bas, .outils, .onglets, #message { display: none !important; } }
+  @media (max-width: 420px) { form { grid-template-columns: 1fr; } .outils { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div id="connexion" hidden role="dialog" aria-modal="true" aria-labelledby="cx-titre">
+  <form id="cx-form" autocomplete="on">
+    <h2 id="cx-titre">Connexion administrateur</h2>
+    <label>Email<input id="cx-email" type="email" autocomplete="username" required></label>
+    <label>Mot de passe<input id="cx-mdp" type="password" autocomplete="current-password" required></label>
+    <p id="cx-erreur" role="alert"></p>
+    <button class="principal" type="submit" id="cx-ok">Se connecter</button>
+  </form>
+</div>
+
+<header class="marque">
+  <div class="marque-in">
+    <div class="logo" id="logo" aria-hidden="true">E</div>
+    <div>
+      <div class="ecole-nom" id="ecole-nom">Mon école</div>
+      <div class="annee" id="annee"></div>
+    </div>
+    <div class="nuage-etat" id="nuage-etat" role="status" hidden></div>
+  </div>
+</header>
+
+<main class="page">
+
+  <!-- ===================== ACCUEIL ===================== -->
+  <section id="page-accueil">
+    <h1 class="titre-page">Tableau de bord</h1>
+
+    <section class="carte demarrage" id="demarrage" hidden>
+      <h2>Pour démarrer</h2>
+      <ol id="etapes"></ol>
+    </section>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="grille">
+      <section class="carte large">
+        <h2>Effectif par classe</h2>
+        <div class="barres" id="graph-classes"></div>
+        <div class="legende" id="legende-classes"></div>
+      </section>
+      <section class="carte">
+        <h2>Garçons et filles</h2>
+        <div id="graph-sexe"></div>
+      </section>
+      <section class="carte">
+        <h2>Répartition par âge</h2>
+        <div id="graph-age"></div>
+      </section>
+      <section class="carte">
+        <h2>À compléter</h2>
+        <ul class="alertes" id="alertes"></ul>
+      </section>
+      <section class="carte">
+        <h2>Dernières inscriptions</h2>
+        <div class="cartes" id="recents" style="grid-template-columns:1fr;margin:0"></div>
+      </section>
+    </div>
+  </section>
+
+  <!-- ===================== ÉLÈVES ===================== -->
+  <section id="page-eleves" hidden>
+    <h1 class="titre-page">Élèves</h1>
+    <section class="carte">
+      <h2 id="titre-form">Nouvel élève</h2>
+      <form id="form" autocomplete="off">
+        <label>Nom *<input id="nom" required></label>
+        <label>Post-nom<input id="postnom"></label>
+        <label>Prénom *<input id="prenom" required></label>
+        <label>Sexe
+          <select id="sexe"><option value="M">Garçon</option><option value="F">Fille</option></select>
+        </label>
+        <label>Date de naissance<input id="naissance" type="date"></label>
+        <label>Classe *<input id="classe" list="liste-classes" placeholder="ex. 3e humanités" required></label>
+        <label>Parent ou tuteur<input id="tuteur"></label>
+        <label>Téléphone du tuteur<input id="telephone" type="tel" inputmode="tel" placeholder="+243 ..."></label>
+        <div class="actions plein">
+          <button class="principal" type="submit" id="bouton-ok">Enregistrer l'élève</button>
+          <button type="button" id="bouton-annuler" hidden>Annuler</button>
+        </div>
+      </form>
+    </section>
+    <div class="outils">
+      <input id="recherche" type="search" placeholder="Chercher un nom ou un matricule" aria-label="Recherche">
+      <select id="filtre-classe" aria-label="Filtrer par classe"></select>
+    </div>
+    <section class="cartes" id="liste" aria-label="Liste des élèves"></section>
+  </section>
+
+  <!-- ===================== CLASSES ===================== -->
+  <section id="page-classes" hidden>
+    <h1 class="titre-page">Classes et matières</h1>
+    <section class="carte">
+      <h2 id="titre-classe">Nouvelle classe</h2>
+      <form id="form-classe" autocomplete="off">
+        <label>Nom de la classe *<input id="c-nom" list="liste-classes" required placeholder="ex. 3e humanités"></label>
+        <label>Titulaire<select id="c-titulaire"></select></label>
+        <div class="actions plein">
+          <button class="principal" type="submit" id="c-ok">Créer la classe</button>
+          <button type="button" id="c-annuler" hidden>Annuler</button>
+        </div>
+      </form>
+    </section>
+    <section class="carte">
+      <h2 id="titre-matiere">Nouvelle matière</h2>
+      <form id="form-matiere" autocomplete="off">
+        <label>Classe *<select id="m-classe" required></select></label>
+        <label>Matière *<input id="m-nom" list="liste-matieres" required placeholder="ex. Mathématiques"></label>
+        <label>Enseignant<select id="m-ens"></select></label>
+        <label>Points maximum<input id="m-max" type="number" min="1" step="1" inputmode="numeric" placeholder="ex. 20"></label>
+        <div class="actions plein">
+          <button class="principal" type="submit" id="m-ok">Ajouter la matière</button>
+          <button type="button" id="m-annuler" hidden>Annuler</button>
+        </div>
+      </form>
+    </section>
+    <section class="cartes" id="liste-classes-cartes" aria-label="Liste des classes"></section>
+  </section>
+
+  <!-- ===================== ENSEIGNANTS ===================== -->
+  <section id="page-enseignants" hidden>
+    <h1 class="titre-page">Enseignants</h1>
+    <section class="carte">
+      <h2 id="titre-ens">Nouvel enseignant</h2>
+      <form id="form-ens" autocomplete="off">
+        <label>Nom complet *<input id="e-nom" required></label>
+        <label>Téléphone<input id="e-tel" type="tel" inputmode="tel" placeholder="+243 ..."></label>
+        <div class="actions plein">
+          <button class="principal" type="submit" id="e-ok">Enregistrer l'enseignant</button>
+          <button type="button" id="e-annuler" hidden>Annuler</button>
+        </div>
+      </form>
+    </section>
+    <section class="cartes" id="liste-ens" aria-label="Liste des enseignants"></section>
+  </section>
+
+  <!-- ===================== RÉGLAGES ===================== -->
+  <section id="page-reglages" hidden>
+    <h1 class="titre-page">Réglages</h1>
+    <section class="carte">
+      <h2>Mon école</h2>
+      <form id="form-ecole" autocomplete="off">
+        <label class="plein">Nom de l'école<input id="r-nom" placeholder="ex. Complexe scolaire Les Étoiles"></label>
+        <div class="actions plein"><button class="principal" type="submit">Enregistrer</button></div>
+      </form>
+    </section>
+    <section class="carte" id="carte-nuage" hidden>
+      <h2>Base de données en ligne</h2>
+      <p class="discret" id="nuage-compte" style="margin:0 0 12px"></p>
+      <div class="actions">
+        <button type="button" id="nuage-sync">Synchroniser maintenant</button>
+        <button type="button" id="nuage-tirer">Recharger depuis la base</button>
+        <button type="button" id="nuage-sortir" class="danger">Se déconnecter</button>
+      </div>
+    </section>
+    <section class="carte" id="carte-familles" hidden>
+      <h2>Accès des familles</h2>
+      <p class="discret" style="margin:0 0 12px">Chaque élève reçoit un code. Le parent crée son compte dans l'espace parents, puis écrit le matricule de son enfant et ce code (une seule fois).</p>
+      <div class="actions">
+        <button type="button" id="codes-generer">Générer les codes manquants</button>
+        <button type="button" id="codes-voir">Afficher les codes</button>
+      </div>
+      <div id="codes-liste" class="vie-liste"></div>
+    </section>
+    <section class="carte">
+      <h2>Données de test</h2>
+      <p class="discret" style="margin:0 0 12px">Remplit l'école avec des élèves, des notes, des présences, des frais, des devoirs, des messages, un horaire et un calendrier inventés, pour essayer l'application. Les classes de test portent « (test) » dans leur nom. Tu pourras tout supprimer d'un seul bouton, sans toucher à tes vraies données.</p>
+      <div class="actions">
+        <button type="button" id="test-charger">Charger des données de test</button>
+        <button type="button" id="test-effacer" class="danger">Supprimer les données de test</button>
+      </div>
+    </section>
+    <section class="carte">
+      <h2>Sauvegarde</h2>
+      <p class="discret" style="margin:0 0 12px">Les données restent dans le navigateur de ce téléphone (et dans la base en ligne si tu es connecté). Si tu vides les données du navigateur, tout disparaît. Exporte-les régulièrement.</p>
+      <div class="actions">
+        <button type="button" id="export-json">Exporter (JSON)</button>
+        <button type="button" id="export-csv">Élèves en Excel (CSV)</button>
+        <button type="button" id="import-bouton">Importer (JSON)</button>
+        <input id="import-fichier" type="file" accept=".json,application/json" hidden>
+      </div>
+    </section>
+  </section>
+
+  <!-- ===================== NOTES ===================== -->
+  <section id="page-notes" hidden>
+    <h1 class="titre-page">Notes et bulletins</h1>
+    <section class="carte">
+      <div class="outils">
+        <select id="n-classe" aria-label="Classe"></select>
+        <select id="n-periode" aria-label="Période"></select>
+      </div>
+      <div class="onglets" role="group" aria-label="Affichage">
+        <button type="button" id="n-v-saisir" aria-pressed="true">Saisir</button>
+        <button type="button" id="n-v-bulletin" aria-pressed="false">Bulletin</button>
+        <button type="button" id="n-v-classement" aria-pressed="false">Classement</button>
+      </div>
+    </section>
+    <section class="carte" id="n-contenu" aria-live="polite"></section>
+  </section>
+
+  <!-- ===================== VIE SCOLAIRE ===================== -->
+  <section id="page-vie" hidden>
+    <h1 class="titre-page">Vie scolaire</h1>
+    <section class="carte">
+      <div class="onglets vie-onglets" id="vie-onglets" style="flex-wrap:wrap" role="group" aria-label="Rubrique"></div>
+    </section>
+    <section class="carte" id="vie-contenu"></section>
+  </section>
+
+  <datalist id="liste-classes"></datalist>
+  <datalist id="liste-matieres"></datalist>
+</main>
+
+<nav class="bas" aria-label="Sections">
+  <a href="#accueil" id="onglet-accueil">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8M5 10v10h14V10M10 20v-6h4v6"/></svg>Accueil</a>
+  <a href="#eleves" id="onglet-eleves">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Élèves</a>
+  <a href="#classes" id="onglet-classes">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7.5" height="7.5" rx="1"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1"/></svg>Classes</a>
+  <a href="#notes" id="onglet-notes">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h7"/></svg>Notes</a>
+  <a href="#vie" id="onglet-vie">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M9 15l2 2 4-4"/></svg>Vie</a>
+  <a href="#enseignants" id="onglet-enseignants">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9l10-5 10 5-10 5zM6 11.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-4.5"/></svg>Profs</a>
+  <a href="#reglages" id="onglet-reglages">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>Réglages</a>
+</nav>
+<div id="message" role="status" hidden></div>
+
+<script>
+// ---------- 0. Sécurité : afficher les erreurs à l'écran ----------
+// Si quelque chose plante, une bannière rouge dit pourquoi (utile pour trouver le problème sur téléphone).
+function afficherErreur(texte) {
+  let b = document.getElementById("bandeau-erreur");
+  if (!b) {
+    b = document.createElement("div"); b.id = "bandeau-erreur";
+    b.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:9;background:#b3261e;color:#fff;padding:10px 14px;font:14px/1.4 system-ui,sans-serif;white-space:pre-wrap;overflow-wrap:anywhere";
+    document.body.appendChild(b);
+  }
+  b.textContent = "Erreur : " + texte;
+}
+window.addEventListener("error", (e) => afficherErreur(e.message + (e.lineno ? " (ligne " + e.lineno + ")" : "")));
+window.addEventListener("unhandledrejection", (e) => afficherErreur(String(e.reason)));
+
+// Les vieux navigateurs n'ont pas replaceChildren : on le fournit.
+if (!Element.prototype.replaceChildren) {
+  Element.prototype.replaceChildren = function (...noeuds) {
+    while (this.firstChild) this.removeChild(this.firstChild);
+    this.append(...noeuds);
+  };
+}
+
+// ---------- 1. Données ----------
+// Tout est stocké dans le navigateur (localStorage), sous une seule clé.
+// Même clé que les versions précédentes : les données déjà saisies restent là.
+const CLE = "ecole-eleves-v1";
+const TABLES = ["eleves", "classes", "enseignants", "matieres"];
+const PAGES = ["accueil", "eleves", "classes", "notes", "vie", "enseignants", "reglages"];
+const PERIODES = ["1re période", "2e période", "3e période", "4e période"];
+const SEUIL_REUSSITE = 50; // en pourcentage
+const CLASSES_SUGGEREES = ["1re primaire", "2e primaire", "3e primaire", "4e primaire", "5e primaire", "6e primaire",
+  "7e EB", "8e EB", "1re humanités", "2e humanités", "3e humanités", "4e humanités"];
+const MATIERES_SUGGEREES = ["Français", "Mathématiques", "Anglais", "Physique", "Chimie", "Biologie", "Histoire",
+  "Géographie", "Éducation civique et morale", "Informatique", "Éducation physique", "Religion"];
+
+function espaceVide() { return { presences: [], messages: [], devoirs: [], calendrier: [], frais: {}, horaire: {}, recu: 0 }; }
+let donnees = charger();
+
+function charger() {
+  const d = { eleves: [], classes: [], enseignants: [], matieres: [], notes: {}, espace: espaceVide(), compteur: 0, ecole: { nom: "" } };
+  try {
+    const s = JSON.parse(localStorage.getItem(CLE));
+    if (s && Array.isArray(s.eleves)) {
+      for (const t of TABLES) if (Array.isArray(s[t])) d[t] = s[t];
+      if (s.notes && typeof s.notes === "object" && !Array.isArray(s.notes)) d.notes = s.notes;
+      if (s.espace && typeof s.espace === "object") {
+        for (const k of ["presences", "messages", "devoirs", "calendrier"]) if (Array.isArray(s.espace[k])) d.espace[k] = s.espace[k];
+        for (const k of ["frais", "horaire"]) if (s.espace[k] && typeof s.espace[k] === "object" && !Array.isArray(s.espace[k])) d.espace[k] = s.espace[k];
+        d.espace.recu = Number(s.espace.recu) || 0;
+      }
+      d.compteur = Number(s.compteur) || 0;
+      if (s.ecole && typeof s.ecole.nom === "string") d.ecole.nom = s.ecole.nom;
+    }
+  } catch (e) {}
+  return d;
+}
+
+function ecrireLocal() { try { localStorage.setItem(CLE, JSON.stringify(donnees)); return true; } catch (e) { return false; } }
+function sauver() {
+  nettoyerNotes();
+  if (!ecrireLocal()) message("Sauvegarde impossible : stockage plein ou bloqué.");
+  planifierSync();
+}
+
+// ---------- 2. Petits outils ----------
+const $ = (id) => document.getElementById(id);
+const nouvelId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const comparer = (a, b) => a.localeCompare(b, "fr", { numeric: true });
+
+// Crée un élément et met du TEXTE (jamais du HTML) : ça évite d'injecter du code par erreur.
+function el(balise, classe, texte) {
+  const n = document.createElement(balise);
+  if (classe) n.className = classe;
+  if (texte != null) n.textContent = texte;
+  return n;
+}
+
+function bouton(texte, classe, action) {
+  const b = el("button", classe, texte);
+  b.type = "button";
+  b.addEventListener("click", action);
+  return b;
+}
+
+// Minuscules et sans accents : "Élise" devient "elise", pour comparer et chercher.
+function simple(t) {
+  return (t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+}
+
+function age(dateNaissance) {
+  if (!dateNaissance) return null;
+  const n = new Date(dateNaissance), auj = new Date();
+  let a = auj.getFullYear() - n.getFullYear();
+  const pasEncore = auj.getMonth() < n.getMonth() || (auj.getMonth() === n.getMonth() && auj.getDate() < n.getDate());
+  if (pasEncore) a--;
+  return a >= 0 && a < 100 ? a : null;
+}
+
+// Année scolaire : elle commence en septembre.
+function anneeScolaire() {
+  const d = new Date(), a = d.getFullYear();
+  return d.getMonth() >= 8 ? a + "-" + (a + 1) : (a - 1) + "-" + a;
+}
+
+function initiales(texte) {
+  const mots = (texte || "").trim().split(/\s+/).filter(Boolean);
+  if (!mots.length) return "?";
+  return (mots[0][0] + (mots.length > 1 ? mots[mots.length - 1][0] : "")).toUpperCase();
+}
+
+// Une couleur stable par personne, choisie à partir de son identifiant.
+function avatar(id, texte) {
+  let h = 0;
+  for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) % 360;
+  const a = el("div", "avatar", texte);
+  a.style.background = "hsl(" + h + " 38% 38%)";
+  a.setAttribute("aria-hidden", "true");
+  return a;
+}
+
+let minuteur = null;
+function message(texte) {
+  const m = $("message");
+  m.textContent = texte; m.hidden = false;
+  clearTimeout(minuteur);
+  minuteur = setTimeout(() => { m.hidden = true; }, 3200);
+}
+
+// Remplit une liste déroulante en gardant le choix actuel s'il existe encore.
+function remplirSelect(select, options, texteVide) {
+  const avant = select.value;
+  select.replaceChildren(new Option(texteVide, ""), ...options.map((o) => new Option(o.texte, o.valeur)));
+  select.value = options.some((o) => o.valeur === avant) ? avant : "";
+}
+
+const classeParNom = (nom) => donnees.classes.find((c) => simple(c.nom) === simple(nom));
+const classeParId = (id) => donnees.classes.find((c) => c.id === id);
+const enseignantParId = (id) => donnees.enseignants.find((e) => e.id === id);
+const nomEnseignant = (id) => (enseignantParId(id) || {}).nom || "";
+const nomComplet = (x) => [x.nom, x.postnom, x.prenom].filter(Boolean).join(" ");
+
+// Trouve la classe qui porte ce nom, ou la crée si elle n'existe pas encore.
+function assurerClasse(nom) {
+  let c = classeParNom(nom);
+  if (!c) {
+    c = { id: nouvelId(), nom: nom.trim(), titulaireId: "" };
+    donnees.classes.push(c);
+  }
+  return c;
+}
+
+// Les élèves des premières versions n'ont que le nom de leur classe : on crée les classes qui manquent.
+function declarerClassesDesEleves() {
+  let change = false;
+  for (const x of donnees.eleves) {
+    if (x.classe && !classeParNom(x.classe)) { assurerClasse(x.classe); change = true; }
+  }
+  if (change) sauver();
+}
+
+// ---------- 3. Navigation ----------
+function route(defiler) {
+  const demande = location.hash.slice(1);
+  const nom = PAGES.includes(demande) ? demande : "accueil";
+  for (const p of PAGES) {
+    $("page-" + p).hidden = p !== nom;
+    const o = $("onglet-" + p);
+    if (p === nom) o.setAttribute("aria-current", "page"); else o.removeAttribute("aria-current");
+  }
+  if (defiler) window.scrollTo(0, 0);
+}
+window.addEventListener("hashchange", () => route(true));
+
+// ---------- 4. Tableau de bord ----------
+function kpi(valeur, libelle, aide) {
+  const k = el("div", "kpi");
+  k.appendChild(el("div", "n", String(valeur)));
+  k.appendChild(el("div", "l", libelle));
+  if (aide) k.appendChild(el("div", "h", aide));
+  return k;
+}
+
+function ajouterLegende(zone, elements) {
+  zone.replaceChildren();
+  for (const [classe, texte] of elements) {
+    const s = el("span");
+    const p = el("i"); p.className = classe; s.appendChild(p); s.appendChild(document.createTextNode(texte));
+    zone.appendChild(s);
+  }
+}
+
+function donut(garcons, filles) {
+  const NS = "http://www.w3.org/2000/svg", total = garcons + filles, R = 46, C = 2 * Math.PI * R;
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", "0 0 120 120"); svg.setAttribute("class", "donut");
+  svg.setAttribute("role", "img"); svg.setAttribute("aria-label", garcons + " garçons et " + filles + " filles");
+  const cercle = (classe, longueur, decalage) => {
+    const c = document.createElementNS(NS, "circle");
+    c.setAttribute("cx", "60"); c.setAttribute("cy", "60"); c.setAttribute("r", String(R));
+    c.setAttribute("class", classe); c.setAttribute("transform", "rotate(-90 60 60)");
+    if (longueur != null) { c.setAttribute("stroke-dasharray", longueur + " " + (C - longueur)); c.setAttribute("stroke-dashoffset", String(-decalage)); }
+    svg.appendChild(c);
+  };
+  cercle("fond");
+  const lg = C * garcons / total, lf = C * filles / total;
+  if (garcons > 0) cercle("seg-g", lg, 0);
+  if (filles > 0) cercle("seg-f", lf, lg);
+  const t1 = document.createElementNS(NS, "text"); t1.setAttribute("x", "60"); t1.setAttribute("y", "62"); t1.setAttribute("text-anchor", "middle"); t1.setAttribute("class", "d-n"); t1.textContent = String(total);
+  const t2 = document.createElementNS(NS, "text"); t2.setAttribute("x", "60"); t2.setAttribute("y", "80"); t2.setAttribute("text-anchor", "middle"); t2.setAttribute("class", "d-l"); t2.textContent = "élèves";
+  svg.append(t1, t2);
+  return svg;
+}
+
+function afficherAccueil() {
+  const E = donnees.eleves, garcons = E.filter((x) => x.sexe === "M").length, filles = E.length - garcons;
+
+  // Pour démarrer
+  const etapes = [
+    ["Enregistrer les enseignants", donnees.enseignants.length > 0, "#enseignants"],
+    ["Créer les classes", donnees.classes.length > 0, "#classes"],
+    ["Ajouter les matières de chaque classe", donnees.matieres.length > 0, "#classes"],
+    ["Enregistrer les élèves", E.length > 0, "#eleves"]
+  ];
+  $("demarrage").hidden = etapes.every((e) => e[1]);
+  const ol = $("etapes"); ol.replaceChildren();
+  for (const [texte, fait, lien] of etapes) {
+    const li = el("li", fait ? "fait" : "");
+    li.appendChild(el("span", "t", texte));
+    if (!fait) { const a = el("a", null, "Ouvrir"); a.href = lien; li.appendChild(a); }
+    ol.appendChild(li);
+  }
+
+  // Chiffres clés
+  const k = $("kpis"); k.replaceChildren(
+    kpi(E.length, "Élèves", garcons + " garçons · " + filles + " filles"),
+    kpi(donnees.classes.length, "Classes"),
+    kpi(donnees.enseignants.length, "Enseignants"),
+    kpi(donnees.matieres.length, "Matières"));
+
+  // Effectif par classe (garçons et filles empilés, même échelle pour toutes les classes)
+  const zone = $("graph-classes"); zone.replaceChildren();
+  const classes = [...donnees.classes].sort((a, b) => comparer(a.nom, b.nom));
+  const effectifs = classes.map((c) => {
+    const liste = E.filter((x) => x.classe === c.nom);
+    return { nom: c.nom, g: liste.filter((x) => x.sexe === "M").length, f: liste.filter((x) => x.sexe !== "M").length };
+  });
+  const max = Math.max(1, ...effectifs.map((x) => x.g + x.f));
+  if (!classes.length) zone.appendChild(el("p", "vide", "Aucune classe pour l'instant."));
+  for (const x of effectifs) {
+    const ligne = el("div", "barre");
+    ligne.appendChild(el("span", "nom", x.nom));
+    const piste = el("div", "piste");
+    const sg = el("div", "seg-g"); sg.style.width = (100 * x.g / max) + "%";
+    const sf = el("div", "seg-f"); sf.style.width = (100 * x.f / max) + "%";
+    piste.append(sg, sf);
+    ligne.appendChild(piste);
+    ligne.appendChild(el("span", "v", String(x.g + x.f)));
+    zone.appendChild(ligne);
+  }
+  ajouterLegende($("legende-classes"), classes.length ? [["seg-g", "Garçons"], ["seg-f", "Filles"]] : []);
+
+  // Garçons et filles
+  const gs = $("graph-sexe"); gs.replaceChildren();
+  if (!E.length) gs.appendChild(el("p", "vide", "Pas encore d'élèves."));
+  else {
+    const bloc = el("div", "donut-bloc"); bloc.appendChild(donut(garcons, filles));
+    const lg = el("div", "donut-legende");
+    for (const [classe, nom, n] of [["seg-g", "Garçons", garcons], ["seg-f", "Filles", filles]]) {
+      const l = el("div"); const p = el("i"); p.className = classe; p.style.cssText = "display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:8px";
+      const b = el("b", null, String(n)); l.append(p, document.createTextNode(nom + " : "), b, document.createTextNode(" (" + Math.round(100 * n / E.length) + " %)"));
+      lg.appendChild(l);
+    }
+    bloc.appendChild(lg); gs.appendChild(bloc);
+  }
+
+  // Répartition par âge
+  const ga = $("graph-age"); ga.replaceChildren();
+  const ages = E.map((x) => age(x.naissance)).filter((a) => a != null);
+  if (!ages.length) ga.appendChild(el("p", "vide", "Renseigne les dates de naissance pour voir ce graphique."));
+  else {
+    const mn = Math.min(...ages), mx = Math.max(...ages), cpt = {};
+    for (const a of ages) cpt[a] = (cpt[a] || 0) + 1;
+    const pic = Math.max(...Object.values(cpt));
+    const barres = el("div", "ages");
+    for (let a = mn; a <= mx; a++) {
+      const n = cpt[a] || 0, c = el("div", "age");
+      const col = el("div", "col"); col.style.height = (n ? Math.max(4, 100 * n / pic * 0.8) : 0) + "%";
+      c.append(el("span", null, n ? String(n) : ""), col, el("span", null, a + " ans"));
+      barres.appendChild(c);
+    }
+    ga.appendChild(barres);
+    if (ages.length < E.length) ga.appendChild(el("p", "note-age", (E.length - ages.length) + " élève(s) sans date de naissance."));
+  }
+
+  // À compléter
+  const al = $("alertes"); al.replaceChildren();
+  const points = [
+    [donnees.classes.filter((c) => !c.titulaireId).length, "classe(s) sans titulaire", "#classes"],
+    [donnees.classes.filter((c) => !donnees.matieres.some((m) => m.classeId === c.id)).length, "classe(s) sans matières", "#classes"],
+    [donnees.matieres.filter((m) => !m.enseignantId).length, "matière(s) sans enseignant", "#classes"],
+    [E.filter((x) => !x.telephone).length, "élève(s) sans téléphone de tuteur", "#eleves"],
+    [E.filter((x) => !x.naissance).length, "élève(s) sans date de naissance", "#eleves"]
+  ].filter((p) => p[0] > 0);
+  const rien = !E.length && !donnees.classes.length && !donnees.enseignants.length;
+  if (!points.length) {
+    const li = el("li"); const p = el("span", "pastille ok", "✓"); li.append(p, el("span", "t", rien ? "Rien à signaler pour l'instant." : "Tout est en ordre."));
+    al.appendChild(li);
+  }
+  for (const [n, texte, lien] of points) {
+    const li = el("li");
+    li.append(el("span", "pastille", String(n)), el("span", "t", texte));
+    const a = el("a", null, "Voir"); a.href = lien; li.appendChild(a);
+    al.appendChild(li);
+  }
+
+  // Dernières inscriptions
+  const rc = $("recents"); rc.replaceChildren();
+  const derniers = E.slice(-5).reverse();
+  if (!derniers.length) rc.appendChild(el("p", "vide", "Aucune inscription pour l'instant."));
+  for (const x of derniers) rc.appendChild(ficheEleve(x, true));
+}
+
+// ---------- 5. Élèves ----------
+let enEdition = null; // id de l'élève en cours de modification, sinon null
+
+$("form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const eleve = {
+    nom: $("nom").value.trim().toUpperCase(),
+    postnom: $("postnom").value.trim(),
+    prenom: $("prenom").value.trim(),
+    sexe: $("sexe").value,
+    naissance: $("naissance").value,
+    classe: $("classe").value.trim(),
+    tuteur: $("tuteur").value.trim(),
+    telephone: $("telephone").value.trim()
+  };
+  if (!eleve.nom || !eleve.prenom || !eleve.classe) { message("Nom, prénom et classe sont obligatoires."); return; }
+
+  // Même nom, post-nom, prénom et date de naissance : probablement déjà enregistré.
+  const doublon = donnees.eleves.find((x) => x.id !== enEdition && simple(x.nom + x.postnom + x.prenom) === simple(eleve.nom + eleve.postnom + eleve.prenom) && x.naissance === eleve.naissance);
+  if (doublon && !confirm("Un élève identique existe déjà (" + doublon.matricule + "). L'enregistrer quand même ?")) return;
+
+  const existait = !!classeParNom(eleve.classe);
+  eleve.classe = assurerClasse(eleve.classe).nom; // même orthographe que la classe déclarée
+
+  if (enEdition) {
+    Object.assign(donnees.eleves.find((y) => y.id === enEdition), eleve);
+    message("Élève modifié.");
+  } else {
+    donnees.compteur++;
+    eleve.id = nouvelId();
+    eleve.matricule = "E" + new Date().getFullYear() + "-" + String(donnees.compteur).padStart(3, "0");
+    donnees.eleves.push(eleve);
+    message("Élève enregistré : " + eleve.matricule + (existait ? "" : " (classe créée)"));
+  }
+  sauver(); quitterEdition(); afficher();
+});
+
+function commencerEdition(id) {
+  const x = donnees.eleves.find((y) => y.id === id);
+  if (!x) return;
+  if (location.hash !== "#eleves") { location.hash = "#eleves"; }
+  enEdition = id;
+  for (const champ of ["nom", "postnom", "prenom", "sexe", "naissance", "classe", "tuteur", "telephone"]) $(champ).value = x[champ] || "";
+  $("titre-form").textContent = "Modifier " + x.matricule;
+  $("bouton-ok").textContent = "Enregistrer les modifications";
+  $("bouton-annuler").hidden = false;
+  $("form").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function quitterEdition() {
+  enEdition = null;
+  $("form").reset();
+  $("titre-form").textContent = "Nouvel élève";
+  $("bouton-ok").textContent = "Enregistrer l'élève";
+  $("bouton-annuler").hidden = true;
+}
+$("bouton-annuler").addEventListener("click", quitterEdition);
+
+function supprimerEleve(id) {
+  const x = donnees.eleves.find((y) => y.id === id);
+  if (!x || !confirm("Supprimer " + x.nom + " " + x.prenom + " ? Cette action est définitive.")) return;
+  donnees.eleves = donnees.eleves.filter((y) => y.id !== id);
+  if (enEdition === id) quitterEdition();
+  sauver(); afficher(); message("Élève supprimé.");
+}
+
+// Fiche d'un élève. En version "compacte" (tableau de bord), sans boutons.
+function ficheEleve(x, compacte) {
+  const c = el("article", "carte fiche");
+  c.appendChild(avatar(x.id, initiales(x.prenom + " " + x.nom)));
+  const corps = el("div", "corps");
+  const tete = el("div", "entete"); tete.append(el("span", "nom", nomComplet(x)), el("span", "matricule", x.matricule));
+  corps.appendChild(tete);
+  const a = age(x.naissance);
+  corps.appendChild(el("span", "info", [x.classe, x.sexe === "M" ? "Garçon" : "Fille", a != null ? a + " ans" : ""].filter(Boolean).join(" · ")));
+  if (!compacte && (x.tuteur || x.telephone)) {
+    const t = el("span", "info", "Tuteur : " + (x.tuteur || "non indiqué") + (x.telephone ? " · " : ""));
+    if (x.telephone) { const lien = el("a", null, x.telephone); lien.href = "tel:" + x.telephone.replace(/\s+/g, ""); t.appendChild(lien); }
+    corps.appendChild(t);
+  }
+  if (!compacte) {
+    const actions = el("div", "actions");
+    actions.append(bouton("Modifier", "petit", () => commencerEdition(x.id)), bouton("Supprimer", "petit danger", () => supprimerEleve(x.id)));
+    corps.appendChild(actions);
+  }
+  c.appendChild(corps);
+  return c;
+}
+
+function afficherEleves() {
+  const tous = donnees.eleves;
+  const classes = donnees.classes.map((c) => c.nom).sort(comparer);
+  remplirSelect($("filtre-classe"), classes.map((n) => ({ valeur: n, texte: n + " (" + tous.filter((x) => x.classe === n).length + ")" })), "Toutes les classes");
+
+  const q = simple($("recherche").value), filtre = $("filtre-classe").value;
+  const liste = tous
+    .filter((x) => (!filtre || x.classe === filtre) && (!q || simple(nomComplet(x) + " " + x.matricule).includes(q)))
+    .sort((a, b) => comparer(a.classe, b.classe) || a.nom.localeCompare(b.nom, "fr"));
+
+  const zone = $("liste"); zone.replaceChildren();
+  if (!liste.length) {
+    zone.appendChild(el("p", "vide", tous.length ? "Aucun élève ne correspond à la recherche." : "Aucun élève pour l'instant. Remplis le formulaire pour enregistrer le premier."));
+    return;
+  }
+  for (const x of liste) zone.appendChild(ficheEleve(x, false));
+}
+$("recherche").addEventListener("input", afficherEleves);
+$("filtre-classe").addEventListener("change", afficherEleves);
+
+// ---------- 6. Classes ----------
+let enEditionClasse = null;
+
+$("form-classe").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const nom = $("c-nom").value.trim();
+  if (!nom) return;
+  const autre = classeParNom(nom);
+  if (autre && autre.id !== enEditionClasse) { message("Cette classe existe déjà."); return; }
+
+  if (enEditionClasse) {
+    const c = classeParId(enEditionClasse);
+    const ancien = c.nom;
+    c.nom = nom; c.titulaireId = $("c-titulaire").value;
+    for (const x of donnees.eleves) if (x.classe === ancien) x.classe = nom; // on renomme aussi chez les élèves
+    message("Classe modifiée.");
+  } else {
+    donnees.classes.push({ id: nouvelId(), nom, titulaireId: $("c-titulaire").value });
+    message("Classe créée : " + nom);
+  }
+  sauver(); quitterEditionClasse(); afficher();
+});
+
+function commencerEditionClasse(id) {
+  const c = classeParId(id); if (!c) return;
+  enEditionClasse = id;
+  $("c-nom").value = c.nom; $("c-titulaire").value = c.titulaireId || "";
+  $("titre-classe").textContent = "Modifier la classe " + c.nom;
+  $("c-ok").textContent = "Enregistrer les modifications";
+  $("c-annuler").hidden = false;
+  $("form-classe").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+function quitterEditionClasse() {
+  enEditionClasse = null; $("form-classe").reset();
+  $("titre-classe").textContent = "Nouvelle classe";
+  $("c-ok").textContent = "Créer la classe";
+  $("c-annuler").hidden = true;
+}
+$("c-annuler").addEventListener("click", quitterEditionClasse);
+
+function supprimerClasse(id) {
+  const c = classeParId(id); if (!c) return;
+  const effectif = donnees.eleves.filter((x) => x.classe === c.nom).length;
+  if (effectif) { message("Impossible : " + effectif + " élève(s) sont dans cette classe. Déplace-les d'abord."); return; }
+  if (!confirm("Supprimer la classe " + c.nom + " et ses matières ?")) return;
+  donnees.classes = donnees.classes.filter((y) => y.id !== id);
+  donnees.matieres = donnees.matieres.filter((m) => m.classeId !== id);
+  if (enEditionClasse === id) quitterEditionClasse();
+  sauver(); afficher(); message("Classe supprimée.");
+}
+
+// ---------- 7. Matières ----------
+let enEditionMatiere = null;
+
+$("form-matiere").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const m = {
+    classeId: $("m-classe").value,
+    nom: $("m-nom").value.trim(),
+    enseignantId: $("m-ens").value,
+    max: $("m-max").value ? Number($("m-max").value) : null
+  };
+  if (!m.classeId || !m.nom) { message("Choisis une classe et écris le nom de la matière."); return; }
+  const doublon = donnees.matieres.find((x) => x.id !== enEditionMatiere && x.classeId === m.classeId && simple(x.nom) === simple(m.nom));
+  if (doublon) { message("Cette matière existe déjà dans cette classe."); return; }
+
+  if (enEditionMatiere) {
+    Object.assign(donnees.matieres.find((x) => x.id === enEditionMatiere), m);
+    message("Matière modifiée.");
+  } else {
+    m.id = nouvelId(); donnees.matieres.push(m);
+    message("Matière ajoutée.");
+  }
+  const classe = $("m-classe").value;
+  sauver(); quitterEditionMatiere(); afficher(); $("m-classe").value = classe; // on garde la classe choisie pour enchaîner
+});
+
+function commencerEditionMatiere(id) {
+  const m = donnees.matieres.find((x) => x.id === id); if (!m) return;
+  enEditionMatiere = id;
+  $("m-classe").value = m.classeId; $("m-nom").value = m.nom; $("m-ens").value = m.enseignantId || ""; $("m-max").value = m.max == null ? "" : m.max;
+  $("titre-matiere").textContent = "Modifier la matière";
+  $("m-ok").textContent = "Enregistrer les modifications";
+  $("m-annuler").hidden = false;
+  $("form-matiere").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+function quitterEditionMatiere() {
+  enEditionMatiere = null; $("form-matiere").reset();
+  $("titre-matiere").textContent = "Nouvelle matière";
+  $("m-ok").textContent = "Ajouter la matière";
+  $("m-annuler").hidden = true;
+}
+$("m-annuler").addEventListener("click", quitterEditionMatiere);
+
+function supprimerMatiere(id) {
+  const m = donnees.matieres.find((x) => x.id === id);
+  if (!m || !confirm("Supprimer la matière " + m.nom + " ?")) return;
+  donnees.matieres = donnees.matieres.filter((x) => x.id !== id);
+  if (enEditionMatiere === id) quitterEditionMatiere();
+  sauver(); afficher(); message("Matière supprimée.");
+}
+
+// Copie les matières d'une classe vers une autre (sans créer de doublons).
+function copierMatieres(depuisId, versId) {
+  if (!depuisId) { message("Choisis la classe à copier."); return; }
+  let n = 0;
+  for (const m of donnees.matieres.filter((x) => x.classeId === depuisId)) {
+    if (donnees.matieres.some((x) => x.classeId === versId && simple(x.nom) === simple(m.nom))) continue;
+    donnees.matieres.push({ ...m, id: nouvelId(), classeId: versId }); n++;
+  }
+  sauver(); afficher(); message(n + " matière(s) copiée(s).");
+}
+
+function afficherClasses() {
+  const zone = $("liste-classes-cartes"); zone.replaceChildren();
+  const classes = [...donnees.classes].sort((a, b) => comparer(a.nom, b.nom));
+  if (!classes.length) {
+    zone.appendChild(el("p", "vide", "Aucune classe pour l'instant. Crée la première avec le formulaire ci-dessus."));
+    return;
+  }
+  for (const c of classes) {
+    const carte = el("article", "carte");
+    const effectif = donnees.eleves.filter((x) => x.classe === c.nom).length;
+    const tete = el("div", "entete"); tete.append(el("span", "nom", c.nom), el("span", "puce", effectif + " élève(s)"));
+    carte.appendChild(tete);
+    carte.appendChild(el("span", "info", "Titulaire : " + (nomEnseignant(c.titulaireId) || "non attribué")));
+
+    carte.appendChild(el("h3", null, "Matières"));
+    const matieres = donnees.matieres.filter((m) => m.classeId === c.id).sort((a, b) => comparer(a.nom, b.nom));
+    if (!matieres.length) carte.appendChild(el("span", "info", "Aucune matière pour cette classe."));
+    else {
+      const ul = el("ul", "matieres");
+      for (const m of matieres) {
+        const li = el("li");
+        const t = el("span", "m-texte", m.nom);
+        const ens = nomEnseignant(m.enseignantId);
+        if (ens) t.appendChild(el("span", "info", " · " + ens));
+        li.appendChild(t);
+        if (m.max != null) li.appendChild(el("span", "puce", "/" + m.max));
+        li.append(bouton("Modifier", "petit", () => commencerEditionMatiere(m.id)), bouton("Supprimer", "petit danger", () => supprimerMatiere(m.id)));
+        ul.appendChild(li);
+      }
+      carte.appendChild(ul);
+    }
+
+    // Copier les matières d'une autre classe qui en a déjà
+    const sources = classes.filter((o) => o.id !== c.id && donnees.matieres.some((m) => m.classeId === o.id));
+    if (sources.length) {
+      const bloc = el("div", "copier");
+      const sel = document.createElement("select");
+      sel.setAttribute("aria-label", "Copier les matières d'une autre classe");
+      remplirSelect(sel, sources.map((o) => ({ valeur: o.id, texte: o.nom })), "Copier les matières de…");
+      bloc.append(sel, bouton("Copier", "petit", () => copierMatieres(sel.value, c.id)));
+      carte.appendChild(bloc);
+    }
+
+    const actions = el("div", "actions"); actions.style.marginTop = "12px";
+    actions.append(bouton("Modifier la classe", "petit", () => commencerEditionClasse(c.id)), bouton("Supprimer la classe", "petit danger", () => supprimerClasse(c.id)));
+    carte.appendChild(actions);
+    zone.appendChild(carte);
+  }
+}
+
+// ---------- 8. Enseignants ----------
+let enEditionEns = null;
+
+$("form-ens").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const ens = { nom: $("e-nom").value.trim(), telephone: $("e-tel").value.trim() };
+  if (!ens.nom) return;
+  if (donnees.enseignants.some((x) => x.id !== enEditionEns && simple(x.nom) === simple(ens.nom))) { message("Cet enseignant existe déjà."); return; }
+  if (enEditionEns) {
+    Object.assign(enseignantParId(enEditionEns), ens);
+    message("Enseignant modifié.");
+  } else {
+    ens.id = nouvelId(); donnees.enseignants.push(ens);
+    message("Enseignant enregistré.");
+  }
+  sauver(); quitterEditionEns(); afficher();
+});
+
+function commencerEditionEns(id) {
+  const x = enseignantParId(id); if (!x) return;
+  enEditionEns = id;
+  $("e-nom").value = x.nom; $("e-tel").value = x.telephone || "";
+  $("titre-ens").textContent = "Modifier " + x.nom;
+  $("e-ok").textContent = "Enregistrer les modifications";
+  $("e-annuler").hidden = false;
+  $("form-ens").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+function quitterEditionEns() {
+  enEditionEns = null; $("form-ens").reset();
+  $("titre-ens").textContent = "Nouvel enseignant";
+  $("e-ok").textContent = "Enregistrer l'enseignant";
+  $("e-annuler").hidden = true;
+}
+$("e-annuler").addEventListener("click", quitterEditionEns);
+
+function supprimerEns(id) {
+  const x = enseignantParId(id); if (!x) return;
+  if (!confirm("Supprimer " + x.nom + " ? Ses matières et ses classes resteront, sans enseignant attribué.")) return;
+  donnees.enseignants = donnees.enseignants.filter((y) => y.id !== id);
+  for (const m of donnees.matieres) if (m.enseignantId === id) m.enseignantId = "";
+  for (const c of donnees.classes) if (c.titulaireId === id) c.titulaireId = "";
+  if (enEditionEns === id) quitterEditionEns();
+  sauver(); afficher(); message("Enseignant supprimé.");
+}
+
+function afficherEnseignants() {
+  const zone = $("liste-ens"); zone.replaceChildren();
+  const liste = [...donnees.enseignants].sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
+  if (!liste.length) {
+    zone.appendChild(el("p", "vide", "Aucun enseignant pour l'instant. Enregistre le premier avec le formulaire ci-dessus."));
+    return;
+  }
+  for (const x of liste) {
+    const c = el("article", "carte fiche");
+    c.appendChild(avatar(x.id, initiales(x.nom)));
+    const corps = el("div", "corps");
+    corps.appendChild(el("span", "nom", x.nom));
+    if (x.telephone) {
+      const t = el("span", "info"); const lien = el("a", null, x.telephone);
+      lien.href = "tel:" + x.telephone.replace(/\s+/g, ""); t.appendChild(lien); corps.appendChild(t);
+    }
+    const titulaire = donnees.classes.filter((k) => k.titulaireId === x.id).map((k) => k.nom);
+    if (titulaire.length) corps.appendChild(el("span", "info", "Titulaire de : " + titulaire.join(", ")));
+    const cours = donnees.matieres.filter((m) => m.enseignantId === x.id)
+      .map((m) => (classeParId(m.classeId) || {}).nom + " : " + m.nom).sort(comparer);
+    corps.appendChild(el("span", "info", cours.length ? "Enseigne : " + cours.join(" ; ") : "Aucune matière attribuée."));
+    const actions = el("div", "actions");
+    actions.append(bouton("Modifier", "petit", () => commencerEditionEns(x.id)), bouton("Supprimer", "petit danger", () => supprimerEns(x.id)));
+    corps.appendChild(actions);
+    c.appendChild(corps);
+    zone.appendChild(c);
+  }
+}
+
+// ---------- 9. Réglages ----------
+$("form-ecole").addEventListener("submit", (e) => {
+  e.preventDefault();
+  donnees.ecole.nom = $("r-nom").value.trim();
+  sauver(); afficher(); message("Nom de l'école enregistré.");
+});
+
+// ---------- 10. Tout afficher ----------
+function afficherEntete() {
+  const nom = donnees.ecole.nom || "Mon école";
+  $("ecole-nom").textContent = nom;
+  $("logo").textContent = initiales(nom).slice(0, 2);
+  $("annee").textContent = "Année scolaire " + anneeScolaire();
+  document.title = nom + " · Gestion école";
+}
+
+function afficher() {
+  // listes déroulantes et suggestions, d'abord
+  const ensOptions = [...donnees.enseignants].sort((a, b) => a.nom.localeCompare(b.nom, "fr")).map((x) => ({ valeur: x.id, texte: x.nom }));
+  remplirSelect($("c-titulaire"), ensOptions, "Aucun titulaire");
+  remplirSelect($("m-ens"), ensOptions, "Non attribué");
+  remplirSelect($("m-classe"), [...donnees.classes].sort((a, b) => comparer(a.nom, b.nom)).map((c) => ({ valeur: c.id, texte: c.nom })), "Choisir une classe");
+  $("liste-classes").replaceChildren(...[...new Set([...CLASSES_SUGGEREES, ...donnees.classes.map((c) => c.nom)])].map((n) => new Option(n)));
+  $("liste-matieres").replaceChildren(...[...new Set([...MATIERES_SUGGEREES, ...donnees.matieres.map((m) => m.nom)])].map((n) => new Option(n)));
+
+  afficherEntete(); afficherAccueil(); afficherEleves(); afficherClasses(); afficherEnseignants(); afficherNotes(); afficherVie();
+}
+
+// ---------- 10b. Notes et bulletins ----------
+// Une note est rangée sous la clé "idEleve|idMatiere|période". La matière porte son maximum (20 par défaut).
+let vueNotes = "saisir";
+const cleNote = (e, m, p) => e + "|" + m + "|" + p;
+const maxMatiere = (m) => (m.max > 0 ? m.max : 20);
+const arrondi = (v) => Math.round(v * 10) / 10;
+const formatNombre = (v) => String(arrondi(v)).replace(".", ",");
+
+function nettoyerNotes() {
+  const eleves = new Set(donnees.eleves.map((x) => x.id));
+  const matieres = new Set(donnees.matieres.map((x) => x.id));
+  for (const k of Object.keys(donnees.notes)) {
+    const [e, m] = k.split("|");
+    if (!eleves.has(e) || !matieres.has(m)) delete donnees.notes[k];
+  }
+  const E = donnees.espace, classes = new Set(donnees.classes.map((c) => c.id));
+  E.presences = E.presences.filter((p) => eleves.has(p.eleveId));
+  for (const k of Object.keys(E.frais)) if (!eleves.has(k)) delete E.frais[k];
+  for (const k of Object.keys(E.horaire)) if (!classes.has(k)) delete E.horaire[k];
+  E.devoirs = E.devoirs.filter((d) => classes.has(d.classeId));
+  E.messages = E.messages.filter((m) => !m.cible || classes.has(m.cible) || eleves.has(m.cible));
+  E.calendrier = E.calendrier.filter((e) => !e.classeId || classes.has(e.classeId));
+}
+
+function noteDe(eleveId, matiere, periode) {
+  const v = donnees.notes[cleNote(eleveId, matiere.id, periode)];
+  return typeof v === "number" ? v : null;
+}
+
+// Total, maximum et pourcentage d'un élève, sur les matières où il a une note.
+function resultatEleve(eleveId, matieres, periode) {
+  let total = 0, maxi = 0, n = 0;
+  for (const m of matieres) {
+    const v = noteDe(eleveId, m, periode);
+    if (v == null) continue;
+    total += v; maxi += maxMatiere(m); n++;
+  }
+  return { total, maxi, n, pct: maxi > 0 ? (total / maxi) * 100 : null };
+}
+
+function classementClasse(eleves, matieres, periode) {
+  const liste = eleves.map((x) => ({ eleve: x, ...resultatEleve(x.id, matieres, periode) }));
+  const notes = liste.filter((r) => r.pct != null).sort((a, b) => b.pct - a.pct);
+  for (const r of notes) r.rang = 1 + notes.filter((o) => o.pct > r.pct + 1e-9).length;
+  return { tous: liste, classes: notes };
+}
+
+function donneesNotes() {
+  const classe = classeParId($("n-classe").value);
+  const periode = Number($("n-periode").value) || 0;
+  if (!classe) return null;
+  const matieres = donnees.matieres.filter((m) => m.classeId === classe.id).sort((a, b) => comparer(a.nom, b.nom));
+  const eleves = donnees.eleves.filter((x) => x.classe === classe.nom).sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
+  return { classe, periode, matieres, eleves };
+}
+
+function notesSaisie(zone, d) {
+  const sel = el("select"); sel.id = "n-matiere"; sel.setAttribute("aria-label", "Matière");
+  sel.appendChild(new Option("Choisir une matière", ""));
+  for (const m of d.matieres) sel.appendChild(new Option(m.nom + " (sur " + formatNombre(maxMatiere(m)) + ")", m.id));
+  sel.value = notesSaisie.choix && d.matieres.some((m) => m.id === notesSaisie.choix) ? notesSaisie.choix : "";
+  const ligneRemplis = el("p", "info", "");
+  zone.append(sel, ligneRemplis);
+  const liste = el("div"); liste.style.marginTop = "8px";
+  zone.appendChild(liste);
+
+  function dessiner() {
+    notesSaisie.choix = sel.value;
+    liste.replaceChildren();
+    const m = d.matieres.find((x) => x.id === sel.value);
+    if (!m) { ligneRemplis.textContent = "Choisis une matière pour saisir les notes de la classe."; return; }
+    const maxi = maxMatiere(m);
+    const compter = () => { ligneRemplis.textContent = d.eleves.filter((x) => noteDe(x.id, m, d.periode) != null).length + " note(s) sur " + d.eleves.length + " élève(s) · " + PERIODES[d.periode]; };
+    compter();
+    for (const x of d.eleves) {
+      const ligne = el("div", "saisie");
+      ligne.appendChild(el("div", "qui", nomComplet(x)));
+      const champ = el("input");
+      champ.type = "text"; champ.inputMode = "decimal"; champ.autocomplete = "off";
+      champ.setAttribute("aria-label", "Note de " + nomComplet(x) + " en " + m.nom);
+      const actuelle = noteDe(x.id, m, d.periode);
+      champ.value = actuelle == null ? "" : String(actuelle);
+      champ.addEventListener("input", () => {
+        const texte = champ.value.trim().replace(",", ".");
+        const cle = cleNote(x.id, m.id, d.periode);
+        if (texte === "") { delete donnees.notes[cle]; champ.classList.remove("faux"); sauver(); compter(); return; }
+        const v = Number(texte);
+        if (!isFinite(v) || v < 0 || v > maxi) { champ.classList.add("faux"); message("La note doit être entre 0 et " + formatNombre(maxi) + "."); return; }
+        champ.classList.remove("faux");
+        donnees.notes[cle] = v; sauver(); compter();
+      });
+      ligne.append(champ, el("span", "sur", "/ " + formatNombre(maxi)));
+      liste.appendChild(ligne);
+    }
+  }
+  sel.addEventListener("change", dessiner);
+  dessiner();
+}
+
+function notesBulletin(zone, d) {
+  const sel = el("select"); sel.id = "n-eleve"; sel.setAttribute("aria-label", "Élève");
+  sel.appendChild(new Option("Choisir un élève", ""));
+  for (const x of d.eleves) sel.appendChild(new Option(nomComplet(x), x.id));
+  sel.value = notesBulletin.choix && d.eleves.some((x) => x.id === notesBulletin.choix) ? notesBulletin.choix : "";
+  const corps = el("div"); corps.style.marginTop = "12px";
+  zone.append(sel, corps);
+
+  function dessiner() {
+    notesBulletin.choix = sel.value;
+    corps.replaceChildren();
+    const x = d.eleves.find((y) => y.id === sel.value);
+    if (!x) { corps.appendChild(el("p", "info", "Choisis un élève pour voir son bulletin.")); return; }
+    const r = resultatEleve(x.id, d.matieres, d.periode);
+    const cl = classementClasse(d.eleves, d.matieres, d.periode);
+    const moyClasse = cl.classes.length ? cl.classes.reduce((t, y) => t + y.pct, 0) / cl.classes.length : null;
+    const place = cl.classes.find((y) => y.eleve.id === x.id);
+
+    corps.appendChild(el("h3", "", nomComplet(x) + " · " + x.matricule));
+    corps.appendChild(el("p", "info", d.classe.nom + " · " + PERIODES[d.periode]));
+    if (!d.matieres.length) { corps.appendChild(el("p", "info", "Cette classe n'a pas encore de matières. Ajoute-les dans l'onglet Classes.")); return; }
+
+    const resume = el("div", "resume-notes");
+    const case_ = (v, l) => { const c = el("div"); c.append(el("b", "", v), el("span", "", l)); return c; };
+    resume.append(
+      case_(r.pct == null ? "—" : formatNombre(r.pct) + " %", "Pourcentage"),
+      case_(r.n ? formatNombre(r.total) + " / " + formatNombre(r.maxi) : "—", "Total"),
+      case_(place ? place.rang + " / " + cl.classes.length : "—", "Place"),
+      case_(moyClasse == null ? "—" : formatNombre(moyClasse) + " %", "Moyenne de la classe"));
+    corps.appendChild(resume);
+
+    const table = el("table", "bulletin");
+    const tete = el("thead"); const l0 = el("tr");
+    for (const t of ["Matière", "Note", "Sur", "%"]) l0.appendChild(el("th", "", t));
+    l0.firstChild.scope = "col"; tete.appendChild(l0); table.appendChild(tete);
+    const tb = el("tbody");
+    for (const m of d.matieres) {
+      const v = noteDe(x.id, m, d.periode); const l = el("tr");
+      l.append(el("td", "", m.nom), el("td", "", v == null ? "—" : formatNombre(v)), el("td", "", formatNombre(maxMatiere(m))), el("td", "", v == null ? "—" : formatNombre((v / maxMatiere(m)) * 100)));
+      tb.appendChild(l);
+    }
+    table.appendChild(tb);
+    const pied = el("tfoot"); const lp = el("tr");
+    lp.append(el("td", "", "Total"), el("td", "", r.n ? formatNombre(r.total) : "—"), el("td", "", r.n ? formatNombre(r.maxi) : "—"), el("td", "", r.pct == null ? "—" : formatNombre(r.pct)));
+    pied.appendChild(lp); table.appendChild(pied);
+    corps.appendChild(table);
+
+    const manque = d.matieres.length - r.n;
+    if (manque > 0) corps.appendChild(el("p", "info", manque + " matière(s) sans note : le total et la place ne tiennent compte que des notes saisies."));
+    if (r.pct != null) corps.appendChild(el("p", r.pct >= SEUIL_REUSSITE ? "info" : "info", r.pct >= SEUIL_REUSSITE ? "Résultat : réussite (seuil " + SEUIL_REUSSITE + " %)." : "Résultat : en dessous du seuil de " + SEUIL_REUSSITE + " %."));
+    const imp = bouton("Imprimer ou enregistrer en PDF", "", () => window.print());
+    imp.style.marginTop = "10px"; corps.appendChild(imp);
+  }
+  sel.addEventListener("change", dessiner);
+  dessiner();
+}
+
+function notesClassement(zone, d) {
+  const cl = classementClasse(d.eleves, d.matieres, d.periode);
+  if (!cl.classes.length) { zone.appendChild(el("p", "info", "Aucune note saisie pour cette période.")); return; }
+  const ok = cl.classes.filter((r) => r.pct >= SEUIL_REUSSITE).length;
+  zone.appendChild(el("p", "info", ok + " élève(s) sur " + cl.classes.length + " au-dessus de " + SEUIL_REUSSITE + " % · " + PERIODES[d.periode]));
+  for (const r of cl.classes) {
+    const l = el("div", "rang");
+    l.appendChild(el("span", "n", String(r.rang)));
+    const nom = el("span", "", nomComplet(r.eleve)); nom.style.flex = "0 1 46%"; nom.style.overflowWrap = "anywhere";
+    const piste = el("span", "piste"); const barre = el("i"); barre.style.width = Math.max(2, Math.min(100, r.pct)) + "%"; piste.appendChild(barre);
+    l.append(nom, piste, el("span", "pct", formatNombre(r.pct) + " %"));
+    zone.appendChild(l);
+  }
+  const sans = cl.tous.length - cl.classes.length;
+  if (sans) zone.appendChild(el("p", "info", sans + " élève(s) sans note ne figurent pas dans le classement."));
+}
+
+function afficherNotes() {
+  const classes = [...donnees.classes].sort((a, b) => comparer(a.nom, b.nom)).map((c) => ({ valeur: c.id, texte: c.nom }));
+  remplirSelect($("n-classe"), classes, "Choisir une classe");
+  const avant = $("n-periode").value;
+  $("n-periode").replaceChildren(...PERIODES.map((t, i) => new Option(t, String(i))));
+  $("n-periode").value = avant || "0";
+  for (const v of ["saisir", "bulletin", "classement"]) $("n-v-" + v).setAttribute("aria-pressed", String(v === vueNotes));
+  const zone = $("n-contenu"); zone.replaceChildren();
+  const d = donneesNotes();
+  if (!d) { zone.appendChild(el("p", "info", "Choisis une classe pour saisir les notes, voir un bulletin ou le classement.")); return; }
+  if (!d.eleves.length) { zone.appendChild(el("p", "info", "Aucun élève dans cette classe. Enregistre-les dans l'onglet Élèves.")); return; }
+  if (!d.matieres.length) { zone.appendChild(el("p", "info", "Cette classe n'a pas encore de matières. Ajoute-les dans l'onglet Classes (avec leur maximum).")); return; }
+  if (vueNotes === "saisir") notesSaisie(zone, d);
+  else if (vueNotes === "bulletin") notesBulletin(zone, d);
+  else notesClassement(zone, d);
+}
+for (const v of ["saisir", "bulletin", "classement"]) $("n-v-" + v).addEventListener("click", () => { vueNotes = v; afficherNotes(); });
+$("n-classe").addEventListener("change", afficherNotes);
+$("n-periode").addEventListener("change", afficherNotes);
+
+// ---------- 10c. Vie scolaire (présences, frais, devoirs, messages, horaire, calendrier) ----------
+const VIE = { onglet: "presences", classeId: "", date: "", eleveId: "", jour: 0 };
+const VIE_ONGLETS = [["presences", "Présences"], ["frais", "Frais"], ["devoirs", "Devoirs"], ["messages", "Messages"], ["horaire", "Horaire"], ["calendrier", "Calendrier"]];
+const JOURS_COURTS = ["Lun", "Mar", "Mer", "Jeu", "Ven"];
+const TYPES_EVENEMENT = [["sortie", "Sortie"], ["reunion", "Réunion"], ["examen", "Examens"], ["conge", "Congé"], ["frais", "Frais"]];
+const dateAjd = () => new Date().toISOString().slice(0, 10);
+const dateFR = (iso) => { const d = new Date(iso + "T12:00:00"); return isNaN(d) ? iso : d.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "long" }); };
+const nombre = (t) => { const v = Number(String(t).trim().replace(",", ".")); return isFinite(v) && String(t).trim() !== "" ? v : null; };
+
+function champ(libelle, noeud) { const l = el("label"); l.append(document.createTextNode(libelle), noeud); return l; }
+function saisieTexte(type, valeur) { const i = el("input"); i.type = type; i.value = valeur || ""; if (type === "text") i.autocomplete = "off"; return i; }
+function selectDe(options, valeur, vide) { const s = el("select"); if (vide != null) s.appendChild(new Option(vide, "")); for (const [v, t] of options) s.appendChild(new Option(t, v)); s.value = valeur; return s; }
+function ligneListe(zone, classe, contenu, texteSuppr, action) {
+  const l = el("div", "ligne" + (classe ? " " + classe : "")); const c = el("div", "corps");
+  for (const t of contenu) c.appendChild(el("div", t.info ? "info" : "", t.texte));
+  l.appendChild(c);
+  if (action) { const b = bouton("Supprimer", "danger petit", action); b.setAttribute("aria-label", texteSuppr); l.appendChild(b); }
+  zone.appendChild(l);
+}
+function classesTriees() { return [...donnees.classes].sort((a, b) => comparer(a.nom, b.nom)); }
+function choixClasse(zone) {
+  const cs = classesTriees();
+  if (!cs.length) { zone.appendChild(el("p", "info", "Crée d'abord une classe dans l'onglet Classes.")); return null; }
+  if (!cs.some((c) => c.id === VIE.classeId)) VIE.classeId = cs[0].id;
+  const s = selectDe(cs.map((c) => [c.id, c.nom]), VIE.classeId); s.setAttribute("aria-label", "Classe");
+  s.addEventListener("change", () => { VIE.classeId = s.value; VIE.eleveId = ""; afficherVie(); });
+  zone.appendChild(champ("Classe", s));
+  return classeParId(VIE.classeId);
+}
+const elevesDe = (c) => donnees.eleves.filter((x) => x.classe === c.nom).sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
+
+function fixerPresence(eleveId, date, statut) {
+  const P = donnees.espace.presences;
+  donnees.espace.presences = P.filter((p) => !(p.eleveId === eleveId && p.date === date));
+  if (statut) donnees.espace.presences.push({ eleveId, date, statut });
+}
+
+function vPresences(z) {
+  const c = choixClasse(z); if (!c) return;
+  const d = saisieTexte("date", VIE.date || dateAjd()); VIE.date = d.value;
+  d.addEventListener("change", () => { VIE.date = d.value || dateAjd(); afficherVie(); });
+  z.appendChild(champ("Date", d));
+  const eleves = elevesDe(c);
+  if (!eleves.length) { z.appendChild(el("p", "info", "Aucun élève dans cette classe.")); return; }
+  const tous = bouton("Tous présents", "petit", () => { for (const x of eleves) fixerPresence(x.id, VIE.date, "P"); sauver(); afficherVie(); });
+  tous.style.marginTop = "10px"; z.appendChild(tous);
+  const liste = el("div", "vie-liste");
+  for (const x of eleves) {
+    const cur = (donnees.espace.presences.find((p) => p.eleveId === x.id && p.date === VIE.date) || {}).statut || "";
+    const l = el("div", "saisie col"); l.appendChild(el("div", "qui", nomComplet(x)));
+    const g = el("div", "onglets"); g.setAttribute("role", "group"); g.setAttribute("aria-label", "Présence de " + nomComplet(x));
+    for (const [v, t] of [["P", "Présent"], ["A", "Absent"], ["R", "Retard"]]) {
+      const b = bouton(t, "", () => { fixerPresence(x.id, VIE.date, cur === v ? "" : v); sauver(); afficherVie(); });
+      b.setAttribute("aria-pressed", String(cur === v)); g.appendChild(b);
+    }
+    l.appendChild(g); liste.appendChild(l);
+  }
+  z.appendChild(liste);
+  const n = eleves.filter((x) => donnees.espace.presences.some((p) => p.eleveId === x.id && p.date === VIE.date)).length;
+  z.appendChild(el("p", "info", n + " élève(s) sur " + eleves.length + " marqué(s) pour le " + dateFR(VIE.date) + "."));
+}
+
+function vFrais(z) {
+  const c = choixClasse(z); if (!c) return;
+  const eleves = elevesDe(c);
+  if (!eleves.length) { z.appendChild(el("p", "info", "Aucun élève dans cette classe.")); return; }
+  if (!eleves.some((x) => x.id === VIE.eleveId)) VIE.eleveId = eleves[0].id;
+  const E = donnees.espace;
+  const resteDe = (id) => { const f = E.frais[id]; return f ? Math.max(0, f.total - f.paiements.reduce((t, p) => t + p.montant, 0)) : null; };
+  const s = selectDe(eleves.map((x) => [x.id, nomComplet(x) + (E.frais[x.id] ? " · reste " + formatNombre(resteDe(x.id)) + " $" : " · non renseigné")]), VIE.eleveId);
+  s.setAttribute("aria-label", "Élève"); s.addEventListener("change", () => { VIE.eleveId = s.value; afficherVie(); });
+  z.appendChild(champ("Élève", s));
+  const id = VIE.eleveId, f = E.frais[id] || { total: 0, echeance: "", paiements: [] };
+  const form = el("div", "vie-form");
+  const total = saisieTexte("text", f.total ? String(f.total) : ""); total.inputMode = "decimal";
+  const ech = saisieTexte("date", f.echeance);
+  form.append(champ("Total des frais de l'année ($)", total), champ("Date limite du solde", ech));
+  const act = el("div", "actions");
+  act.appendChild(bouton("Enregistrer le montant", "principal", () => {
+    const v = nombre(total.value); if (v == null || v < 0) { message("Écris un montant valide."); return; }
+    const cur = E.frais[id] || (E.frais[id] = { total: 0, echeance: "", paiements: [] });
+    cur.total = v; cur.echeance = ech.value; sauver(); afficherVie(); message("Montant enregistré.");
+  }));
+  act.appendChild(bouton("Même montant pour toute la classe", "", () => {
+    const v = nombre(total.value); if (v == null || v < 0) { message("Écris d'abord un montant valide."); return; }
+    let n = 0; for (const x of eleves) if (!E.frais[x.id]) { E.frais[x.id] = { total: v, echeance: ech.value, paiements: [] }; n++; }
+    sauver(); afficherVie(); message(n + " élève(s) renseigné(s).");
+  }));
+  form.appendChild(act); z.appendChild(form);
+  if (E.frais[id]) {
+    const paye = f.paiements.reduce((t, p) => t + p.montant, 0);
+    z.appendChild(el("h3", "", "Paiements"));
+    z.appendChild(el("p", "info", "Payé : " + formatNombre(paye) + " $ sur " + formatNombre(f.total) + " $ · reste " + formatNombre(Math.max(0, f.total - paye)) + " $"));
+    const lst = el("div", "vie-liste");
+    for (const p of [...f.paiements].sort((a, b) => b.date.localeCompare(a.date)))
+      ligneListe(lst, "", [{ texte: formatNombre(p.montant) + " $ · reçu n° " + p.recu }, { texte: dateFR(p.date), info: true }], "Supprimer le paiement de " + p.montant + " $", () => {
+        if (!confirm("Supprimer ce paiement ?")) return; f.paiements = f.paiements.filter((q) => q !== p); E.frais[id].paiements = f.paiements; sauver(); afficherVie();
+      });
+    z.appendChild(lst);
+    const montant = saisieTexte("text", ""); montant.inputMode = "decimal"; const date = saisieTexte("date", dateAjd());
+    const fp = el("div", "vie-form"); fp.append(champ("Nouveau paiement ($)", montant), champ("Date", date));
+    fp.appendChild(bouton("Enregistrer le paiement", "principal", () => {
+      const v = nombre(montant.value); if (v == null || v <= 0) { message("Écris un montant supérieur à 0."); return; }
+      E.recu = (E.recu || 0) + 1; const recu = String(E.recu).padStart(4, "0");
+      E.frais[id].paiements.push({ id: nouvelId(), date: date.value || dateAjd(), montant: v, recu });
+      sauver(); afficherVie(); message("Paiement enregistré, reçu n° " + recu + ".");
+    }));
+    z.appendChild(fp);
+  } else z.appendChild(el("p", "info", "Enregistre d'abord le total des frais pour pouvoir noter les paiements."));
+}
+
+function vDevoirs(z) {
+  const c = choixClasse(z); if (!c) return;
+  const mats = donnees.matieres.filter((m) => m.classeId === c.id).sort((a, b) => comparer(a.nom, b.nom));
+  if (!mats.length) { z.appendChild(el("p", "info", "Cette classe n'a pas de matières. Ajoute-les dans l'onglet Classes.")); return; }
+  const m = selectDe(mats.map((x) => [x.id, x.nom]), mats[0].id); const titre = saisieTexte("text", "");
+  const d = new Date(); d.setDate(d.getDate() + 1); const pour = saisieTexte("date", d.toISOString().slice(0, 10));
+  const form = el("div", "vie-form"); form.append(champ("Matière", m), champ("Devoir à faire", titre), champ("Pour le", pour));
+  form.appendChild(bouton("Ajouter le devoir", "principal", () => {
+    if (!titre.value.trim() || !pour.value) { message("Écris le devoir et la date."); return; }
+    const mat = mats.find((x) => x.id === m.value);
+    donnees.espace.devoirs.push({ id: nouvelId(), classeId: c.id, matiere: mat.nom, titre: titre.value.trim(), pour: pour.value, prof: nomEnseignant(mat.enseignantId) });
+    sauver(); afficherVie(); message("Devoir ajouté.");
+  }));
+  z.appendChild(form);
+  const lst = el("div", "vie-liste"); const L = donnees.espace.devoirs.filter((x) => x.classeId === c.id).sort((a, b) => a.pour.localeCompare(b.pour));
+  if (!L.length) lst.appendChild(el("p", "info", "Aucun devoir pour cette classe."));
+  for (const x of L) ligneListe(lst, x.pour < dateAjd() ? "passe" : "", [{ texte: x.matiere + " : " + x.titre }, { texte: "Pour " + dateFR(x.pour), info: true }], "Supprimer le devoir " + x.titre, () => {
+    donnees.espace.devoirs = donnees.espace.devoirs.filter((y) => y.id !== x.id); sauver(); afficherVie();
+  });
+  z.appendChild(lst);
+}
+
+function vMessages(z) {
+  const cible = selectDe(classesTriees().map((c) => [c.id, "Parents de " + c.nom]), "", "Toute l'école");
+  const titre = saisieTexte("text", ""); const texte = el("textarea"); texte.setAttribute("aria-label", "Message");
+  const form = el("div", "vie-form"); form.append(champ("Pour", cible), champ("Titre", titre), champ("Message", texte));
+  form.appendChild(bouton("Envoyer le message", "principal", () => {
+    if (!titre.value.trim() || !texte.value.trim()) { message("Écris le titre et le message."); return; }
+    donnees.espace.messages.push({ id: nouvelId(), date: dateAjd(), de: donnees.ecole.nom || "École", titre: titre.value.trim(), texte: texte.value.trim(), cible: cible.value });
+    sauver(); afficherVie(); message("Message publié dans l'espace parents.");
+  }));
+  z.appendChild(form);
+  const lst = el("div", "vie-liste");
+  const L = [...donnees.espace.messages].sort((a, b) => b.date.localeCompare(a.date));
+  if (!L.length) lst.appendChild(el("p", "info", "Aucun message envoyé."));
+  for (const m of L) {
+    const cl = m.cible ? (classeParId(m.cible) || {}).nom || "Un élève" : "Toute l'école";
+    ligneListe(lst, "", [{ texte: m.titre }, { texte: cl + " · " + dateFR(m.date), info: true }], "Supprimer le message " + m.titre, () => {
+      donnees.espace.messages = donnees.espace.messages.filter((y) => y.id !== m.id); sauver(); afficherVie();
+    });
+  }
+  z.appendChild(lst);
+}
+
+function vHoraire(z) {
+  const c = choixClasse(z); if (!c) return;
+  const H = donnees.espace.horaire;
+  const g = el("div", "onglets"); g.setAttribute("role", "group"); g.setAttribute("aria-label", "Jour");
+  JOURS_COURTS.forEach((j, i) => { const b = bouton(j, "", () => { VIE.jour = i; afficherVie(); }); b.setAttribute("aria-pressed", String(VIE.jour === i)); g.appendChild(b); });
+  z.appendChild(g);
+  const cours = (H[c.id] && H[c.id][VIE.jour]) || [];
+  const lst = el("div", "vie-liste");
+  if (!cours.length) lst.appendChild(el("p", "info", "Aucun cours enregistré ce jour-là."));
+  [...cours].sort((a, b) => a.debut.localeCompare(b.debut)).forEach((co) => ligneListe(lst, "", [{ texte: co.debut + "–" + co.fin + " · " + co.matiere }, { texte: [co.salle, co.prof].filter(Boolean).join(" · "), info: true }], "Supprimer le cours " + co.matiere, () => {
+    H[c.id][VIE.jour] = H[c.id][VIE.jour].filter((y) => y !== co); sauver(); afficherVie();
+  }));
+  z.appendChild(lst);
+  const deb = saisieTexte("time", "07:30"), fin = saisieTexte("time", "08:20");
+  const mat = saisieTexte("text", ""); mat.setAttribute("list", "liste-matieres"); const salle = saisieTexte("text", "");
+  const pauseCase = el("input"); pauseCase.type = "checkbox"; const pl = el("label"); pl.style.flexDirection = "row"; pl.style.alignItems = "center"; pl.append(pauseCase, document.createTextNode("C'est une pause (récréation)"));
+  const form = el("div", "vie-form"); form.append(champ("Début", deb), champ("Fin", fin), champ("Matière", mat), champ("Salle", salle), pl);
+  form.appendChild(bouton("Ajouter ce cours", "principal", () => {
+    if (!deb.value || !fin.value || !mat.value.trim()) { message("Écris l'heure de début, de fin et la matière."); return; }
+    if (fin.value <= deb.value) { message("L'heure de fin doit être après le début."); return; }
+    const ref = donnees.matieres.find((m) => m.classeId === c.id && simple(m.nom) === simple(mat.value));
+    if (!H[c.id]) H[c.id] = [[], [], [], [], []];
+    H[c.id][VIE.jour].push({ id: nouvelId(), debut: deb.value, fin: fin.value, matiere: mat.value.trim(), salle: salle.value.trim(), prof: ref ? nomEnseignant(ref.enseignantId) : "", pause: pauseCase.checked });
+    sauver(); afficherVie(); message("Cours ajouté.");
+  }));
+  form.appendChild(bouton("Copier ce jour vers les autres jours", "", () => {
+    if (!cours.length) { message("Ce jour est vide."); return; }
+    if (!confirm("Remplacer les 4 autres jours par celui-ci ?")) return;
+    for (let i = 0; i < 5; i++) if (i !== VIE.jour) H[c.id][i] = cours.map((x) => ({ ...x, id: nouvelId() }));
+    sauver(); afficherVie(); message("Jour copié.");
+  }));
+  z.appendChild(form);
+}
+
+function vCalendrier(z) {
+  const date = saisieTexte("date", dateAjd()); const type = selectDe(TYPES_EVENEMENT, "sortie"); const titre = saisieTexte("text", ""); const detail = saisieTexte("text", "");
+  const portee = selectDe(classesTriees().map((c) => [c.id, c.nom]), "", "Toute l'école");
+  const form = el("div", "vie-form"); form.append(champ("Date", date), champ("Type", type), champ("Titre", titre), champ("Détail (heure, lieu)", detail), champ("Pour", portee));
+  form.appendChild(bouton("Ajouter au calendrier", "principal", () => {
+    if (!titre.value.trim() || !date.value) { message("Écris le titre et la date."); return; }
+    donnees.espace.calendrier.push({ id: nouvelId(), date: date.value, type: type.value, titre: titre.value.trim(), detail: detail.value.trim(), classeId: portee.value });
+    sauver(); afficherVie(); message("Événement ajouté.");
+  }));
+  z.appendChild(form);
+  const lst = el("div", "vie-liste"); const L = [...donnees.espace.calendrier].sort((a, b) => a.date.localeCompare(b.date));
+  if (!L.length) lst.appendChild(el("p", "info", "Aucun événement."));
+  for (const e of L) ligneListe(lst, e.date < dateAjd() ? "passe" : "", [{ texte: e.titre }, { texte: dateFR(e.date) + " · " + (TYPES_EVENEMENT.find((t) => t[0] === e.type) || ["", "Autre"])[1] + (e.detail ? " · " + e.detail : ""), info: true }], "Supprimer l'événement " + e.titre, () => {
+    donnees.espace.calendrier = donnees.espace.calendrier.filter((y) => y.id !== e.id); sauver(); afficherVie();
+  });
+  z.appendChild(lst);
+}
+
+function afficherVie() {
+  const bar = $("vie-onglets"); bar.replaceChildren();
+  for (const [v, t] of VIE_ONGLETS) { const b = bouton(t, "", () => { VIE.onglet = v; afficherVie(); }); b.setAttribute("aria-pressed", String(VIE.onglet === v)); bar.appendChild(b); }
+  const z = $("vie-contenu"); z.replaceChildren();
+  ({ presences: vPresences, frais: vFrais, devoirs: vDevoirs, messages: vMessages, horaire: vHoraire, calendrier: vCalendrier })[VIE.onglet](z);
+}
+
+// ---------- 10d. Données de test (identifiants "ex-...", faciles à supprimer) ----------
+const estTest = (id) => String(id || "").startsWith("ex-");
+function chargerTest() {
+  let graine = 20261112;
+  const hasard = () => { graine |= 0; graine = (graine + 0x6D2B79F5) | 0; let t = Math.imul(graine ^ (graine >>> 15), 1 | graine); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const entre = (a, b) => a + Math.floor(hasard() * (b - a + 1));
+  const jour = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+  const E = donnees.espace;
+  const profs = [["ex-e1", "M. Mukendi", "081 000 00 01"], ["ex-e2", "Mme Ngalula", "081 000 00 02"], ["ex-e3", "M. Kasongo", "081 000 00 03"], ["ex-e4", "Mme Tshiala", "081 000 00 04"], ["ex-e5", "M. Lukusa", "081 000 00 05"]];
+  for (const [id, nom, telephone] of profs) donnees.enseignants.push({ id, nom, telephone });
+  const classes = [["ex-c1", "3e humanités (test)", "ex-e1"], ["ex-c2", "2e humanités (test)", "ex-e2"]];
+  for (const [id, nom, titulaireId] of classes) donnees.classes.push({ id, nom, titulaireId });
+  const mats = [["Mathématiques", 20, "ex-e1"], ["Français", 20, "ex-e2"], ["Physique", 20, "ex-e3"], ["Anglais", 10, "ex-e4"], ["Histoire", 10, "ex-e5"]];
+  for (const [cid] of classes) mats.forEach(([nom, max, ens], i) => donnees.matieres.push({ id: cid + "-m" + (i + 1), classeId: cid, nom, max, enseignantId: ens }));
+  const noms = {
+    "ex-c1": [["KABEYA", "Mukendi", "Jean", "M"], ["ILUNGA", "Tshala", "Marie", "F"], ["BANZA", "Kalala", "Paul", "M"], ["NGALULA", "Mbuyi", "Grâce", "F"], ["KASONGO", "Ngoy", "Patrick", "M"], ["MBUYI", "Kapinga", "Esther", "F"], ["TSHIALA", "Kabongo", "David", "M"], ["LUKUSA", "Mwamba", "Sarah", "F"]],
+    "ex-c2": [["MUKENDI", "Ilunga", "Joël", "M"], ["KALALA", "Banza", "Ruth", "F"], ["NGOY", "Kasongo", "Daniel", "M"], ["KAPINGA", "Mbuyi", "Léa", "F"], ["MWAMBA", "Lukusa", "Samuel", "M"]]
+  };
+  let n = 0; const nomClasse = Object.fromEntries(classes.map(([id, nom]) => [id, nom]));
+  for (const [cid, liste] of Object.entries(noms)) for (const [nom, postnom, prenom, sexe] of liste) {
+    n++; donnees.compteur++;
+    donnees.eleves.push({ id: "ex-a" + n, matricule: "E" + new Date().getFullYear() + "-" + String(donnees.compteur).padStart(3, "0"), nom, postnom, prenom, sexe, naissance: entre(2007, 2010) + "-" + String(entre(1, 12)).padStart(2, "0") + "-" + String(entre(1, 28)).padStart(2, "0"), classe: nomClasse[cid], tuteur: "Famille " + nom.charAt(0) + nom.slice(1).toLowerCase(), telephone: "081 000 01 " + String(n).padStart(2, "0") });
+  }
+  // Notes : 1re période pour tous, 2e période pour une partie (quelques notes manquantes exprès).
+  const forces = {};
+  for (const x of donnees.eleves.filter((y) => estTest(y.id))) {
+    const cid = classes.find(([, nom]) => nom === x.classe)[0]; forces[x.id] = 0.4 + hasard() * 0.5;
+    mats.forEach(([, max], i) => {
+      donnees.notes[x.id + "|" + cid + "-m" + (i + 1) + "|0"] = Math.round(Math.min(max, max * (forces[x.id] + (hasard() - 0.5) * 0.25)) * 2) / 2;
+      if (cid === "ex-c1" && Number(x.id.slice(4)) <= 5 && i < 4) donnees.notes[x.id + "|" + cid + "-m" + (i + 1) + "|1"] = Math.round(Math.min(max, max * (forces[x.id] + (hasard() - 0.4) * 0.25)) * 2) / 2;
+    });
+  }
+  // Présences du mois en cours (jours de classe déjà passés), frais et paiements.
+  const auj = new Date(), an = auj.getFullYear(), mo = auj.getMonth();
+  for (const x of donnees.eleves.filter((y) => estTest(y.id))) {
+    for (let d = 1; d < auj.getDate(); d++) { const dt = new Date(an, mo, d); if (dt.getDay() === 0 || dt.getDay() === 6) continue; const h = hasard(); E.presences.push({ eleveId: x.id, date: an + "-" + String(mo + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0"), statut: h < 0.06 ? "A" : h < 0.12 ? "R" : "P" }); }
+    const nbPaiements = entre(1, 3), paiements = [];
+    for (let k = 0; k < nbPaiements; k++) { E.recu = (E.recu || 0) + 1; paiements.push({ date: jour(-70 + k * 30), montant: k === 2 ? 75 : 120, recu: String(E.recu).padStart(4, "0") }); }
+    E.frais[x.id] = { total: 360, echeance: jour(19), paiements };
+  }
+  E.devoirs.push(
+    { id: "ex-d1", classeId: "ex-c1", matiere: "Mathématiques", titre: "Exercices 4 à 9, page 42", pour: jour(2), prof: "M. Mukendi" },
+    { id: "ex-d2", classeId: "ex-c1", matiere: "Français", titre: "Rédaction : « Mon quartier », une page", pour: jour(3), prof: "Mme Ngalula" },
+    { id: "ex-d3", classeId: "ex-c1", matiere: "Physique", titre: "Compte rendu du TP sur les circuits", pour: jour(3), prof: "M. Kasongo" },
+    { id: "ex-d4", classeId: "ex-c2", matiere: "Anglais", titre: "Apprendre le vocabulaire de l'unité 5", pour: jour(4), prof: "Mme Tshiala" });
+  E.messages.push(
+    { id: "ex-g1", date: jour(-1), de: donnees.ecole.nom || "Direction", titre: "Réunion des parents", texte: "Chers parents,\nLa réunion aura lieu samedi à 9 h dans la salle polyvalente. Votre présence est importante.", cible: "" },
+    { id: "ex-g2", date: jour(-3), de: "Secrétariat", titre: "Rappel : 3e tranche", texte: "Merci de régler la 3e tranche des frais avant la date limite indiquée dans la rubrique Frais.", cible: "ex-c1" });
+  const type = [["07:30", "08:20"], ["08:30", "09:20"], ["09:30", "10:20"], ["10:20", "10:40", 1], ["10:40", "11:30"], ["11:30", "12:20"]];
+  for (const [cid] of classes) {
+    E.horaire[cid] = [0, 1, 2, 3, 4].map((j) => { let k = 0; return type.map(([debut, fin, pause]) => { if (pause) return { id: "ex-h" + cid + j + "p", debut, fin, matiere: "Récréation", salle: "", prof: "", pause: true }; const m = mats[(k + j) % mats.length]; k++; return { id: "ex-h" + cid + j + k, debut, fin, matiere: m[0], salle: m[0] === "Physique" ? "Laboratoire" : "Salle " + (cid === "ex-c1" ? 4 : 3), prof: (profs.find((p) => p[0] === m[2]) || [])[1] || "", pause: false }; }); });
+  }
+  E.calendrier.push(
+    { id: "ex-k1", date: jour(9), type: "sortie", titre: "Sortie pédagogique", detail: "Jardin botanique, départ à 8 h", classeId: "" },
+    { id: "ex-k2", date: jour(11), type: "reunion", titre: "Réunion des parents", detail: "9 h, salle polyvalente", classeId: "" },
+    { id: "ex-k3", date: jour(19), type: "frais", titre: "Date limite de la 3e tranche", detail: "", classeId: "" },
+    { id: "ex-k4", date: jour(27), type: "examen", titre: "Début des compositions", detail: "Dès 7 h", classeId: "" },
+    { id: "ex-k5", date: jour(38), type: "conge", titre: "Vacances de fin d'année", detail: "Reprise en janvier", classeId: "" });
+}
+function effacerTest() {
+  donnees.eleves = donnees.eleves.filter((x) => !estTest(x.id));
+  donnees.classes = donnees.classes.filter((x) => !estTest(x.id));
+  donnees.matieres = donnees.matieres.filter((x) => !estTest(x.id));
+  donnees.enseignants = donnees.enseignants.filter((x) => !estTest(x.id));
+  const E = donnees.espace;
+  E.devoirs = E.devoirs.filter((x) => !estTest(x.id)); E.messages = E.messages.filter((x) => !estTest(x.id)); E.calendrier = E.calendrier.filter((x) => !estTest(x.id));
+  for (const k of Object.keys(E.horaire)) if (estTest(k)) delete E.horaire[k];
+}
+$("test-charger").addEventListener("click", () => {
+  if (donnees.eleves.some((x) => estTest(x.id))) { message("Les données de test sont déjà là."); return; }
+  if (!confirm("Ajouter des données de test (13 élèves, 2 classes, notes, présences, frais...) ?\nTes vraies données ne sont pas touchées.")) return;
+  chargerTest(); sauver(); afficherTout(); message("Données de test ajoutées.");
+});
+$("test-effacer").addEventListener("click", () => {
+  if (!donnees.eleves.some((x) => estTest(x.id)) && !donnees.classes.some((x) => estTest(x.id))) { message("Aucune donnée de test à supprimer."); return; }
+  if (!confirm("Supprimer toutes les données de test ? Tes vraies données ne sont pas touchées.")) return;
+  effacerTest(); sauver(); afficherTout(); message("Données de test supprimées.");
+});
+
+// ---------- 11. Export et import ----------
+function telecharger(nomFichier, contenu, type) {
+  const lien = document.createElement("a");
+  lien.href = URL.createObjectURL(new Blob([contenu], { type }));
+  lien.download = nomFichier;
+  document.body.appendChild(lien); lien.click(); lien.remove();
+}
+const dateDuJour = () => new Date().toISOString().slice(0, 10);
+
+$("export-json").addEventListener("click", () => {
+  telecharger("ecole-" + dateDuJour() + ".json", JSON.stringify(donnees, null, 2), "application/json");
+  message("Sauvegarde exportée.");
+});
+
+$("export-csv").addEventListener("click", () => {
+  const colonnes = ["matricule", "nom", "postnom", "prenom", "sexe", "naissance", "classe", "tuteur", "telephone"];
+  const guillemets = (v) => '"' + String(v || "").replace(/"/g, '""') + '"';
+  const lignes = [colonnes.join(";"), ...donnees.eleves.map((x) => colonnes.map((c) => guillemets(x[c])).join(";"))];
+  telecharger("eleves-" + dateDuJour() + ".csv", "﻿" + lignes.join("\n"), "text/csv;charset=utf-8");
+  message("Fichier Excel exporté.");
+});
+
+$("import-bouton").addEventListener("click", () => $("import-fichier").click());
+$("import-fichier").addEventListener("change", (e) => {
+  const fichier = e.target.files[0]; if (!fichier) return;
+  const lecteur = new FileReader();
+  lecteur.onload = () => {
+    try {
+      const d = JSON.parse(lecteur.result);
+      if (!d || !Array.isArray(d.eleves)) throw new Error("format");
+      let ajoutes = 0;
+      for (const t of TABLES) {
+        const connus = new Set(donnees[t].map((x) => x.id));
+        const nouveaux = (Array.isArray(d[t]) ? d[t] : []).filter((x) => x && x.id && !connus.has(x.id));
+        donnees[t].push(...nouveaux);
+        if (t === "eleves") ajoutes = nouveaux.length;
+      }
+      if (d.notes && typeof d.notes === "object" && !Array.isArray(d.notes)) {
+        for (const k of Object.keys(d.notes)) if (!(k in donnees.notes) && typeof d.notes[k] === "number") donnees.notes[k] = d.notes[k];
+      }
+      if (d.espace && typeof d.espace === "object") {
+        const X = donnees.espace, Y = d.espace;
+        const cles = new Set(X.presences.map((p) => p.eleveId + "|" + p.date));
+        for (const p of Array.isArray(Y.presences) ? Y.presences : []) if (p && !cles.has(p.eleveId + "|" + p.date)) X.presences.push(p);
+        for (const t of ["messages", "devoirs", "calendrier"]) {
+          const ids = new Set(X[t].map((o) => o.id));
+          for (const o of Array.isArray(Y[t]) ? Y[t] : []) if (o && o.id && !ids.has(o.id)) X[t].push(o);
+        }
+        for (const t of ["frais", "horaire"]) if (Y[t] && typeof Y[t] === "object") for (const k of Object.keys(Y[t])) if (!(k in X[t])) X[t][k] = Y[t][k];
+        X.recu = Math.max(X.recu, Number(Y.recu) || 0);
+      }
+      donnees.compteur = Math.max(donnees.compteur, Number(d.compteur) || 0);
+      if (!donnees.ecole.nom && d.ecole && typeof d.ecole.nom === "string") donnees.ecole.nom = d.ecole.nom;
+      declarerClassesDesEleves();
+      sauver(); afficher(); $("r-nom").value = donnees.ecole.nom;
+      message(ajoutes + " élève(s) importé(s), classes et enseignants fusionnés.");
+    } catch (err) { message("Fichier non reconnu."); }
+    e.target.value = "";
+  };
+  lecteur.readAsText(fichier);
+});
+
+// ---------- 12. Base de données en ligne (Supabase) ----------
+// L'application garde son fonctionnement local. Quand tu es connecté, chaque modification est aussi envoyée à la base.
+const CFG = window.SB_CONFIG;
+const CLE_ATT = "ecole-en-attente";
+const ORDRE = ["enseignants", "classes", "matieres", "eleves", "notes", "presences", "frais", "paiements", "devoirs", "messages", "horaire", "calendrier"];
+const CLES = { notes: ["eleve_id", "matiere_id", "periode"], presences: ["eleve_id", "date"], frais: ["eleve_id"] };
+const TRI = { notes: ["eleve_id", "matiere_id", "periode"], presences: ["eleve_id", "date"], frais: ["eleve_id"], ecole: ["id"] };
+let sb = null, compte = null, instantane = {}, fileSync = Promise.resolve(), minuteurSync = null, versionLocale = 0, dernierEtat = "";
+const colonnesCle = (t) => CLES[t] || ["id"];
+const cleLigne = (t, r) => colonnesCle(t).map((c) => r[c]).join("|");
+
+function etatNuage(texte, alerte) {
+  const n = $("nuage-etat"); if (!n) return;
+  n.hidden = !texte; n.textContent = texte || ""; n.classList.toggle("alerte", !!alerte);
+}
+
+function lignes(d) {
+  const E = d.espace, L = {};
+  const idClasse = (nom) => (d.classes.find((c) => simple(c.nom) === simple(nom)) || {}).id || null;
+  L.enseignants = d.enseignants.map((e) => ({ id: e.id, nom: e.nom, telephone: e.telephone || "" }));
+  L.classes = d.classes.map((c) => ({ id: c.id, nom: c.nom, titulaire_id: c.titulaireId || null }));
+  L.matieres = d.matieres.map((m) => ({ id: m.id, classe_id: m.classeId, nom: m.nom, maximum: m.max > 0 ? m.max : 20, enseignant_id: m.enseignantId || null }));
+  L.eleves = d.eleves.map((x) => ({ id: x.id, matricule: x.matricule, nom: x.nom, postnom: x.postnom || "", prenom: x.prenom, sexe: x.sexe === "F" ? "F" : "M", naissance: x.naissance || null, classe_id: idClasse(x.classe), tuteur: x.tuteur || "", telephone: x.telephone || "" }));
+  L.notes = Object.entries(d.notes).filter(([, v]) => typeof v === "number").map(([k, v]) => { const [e, m, p] = k.split("|"); return { eleve_id: e, matiere_id: m, periode: Number(p), valeur: v }; });
+  L.presences = E.presences.map((p) => ({ eleve_id: p.eleveId, date: p.date, statut: p.statut }));
+  L.frais = Object.entries(E.frais).map(([id, f]) => ({ eleve_id: id, total: Number(f.total) || 0, echeance: f.echeance || null }));
+  L.paiements = [];
+  for (const [id, f] of Object.entries(E.frais)) for (const p of f.paiements || []) { if (!p.id) p.id = nouvelId(); L.paiements.push({ id: p.id, eleve_id: id, date: p.date, montant: Number(p.montant), recu: String(p.recu) }); }
+  L.devoirs = E.devoirs.map((x) => ({ id: x.id, classe_id: x.classeId, matiere: x.matiere, titre: x.titre, pour: x.pour, prof: x.prof || "" }));
+  L.messages = E.messages.map((m) => ({ id: m.id, date: m.date, de: m.de || "École", titre: m.titre, texte: m.texte, cible: m.cible || null }));
+  L.horaire = [];
+  for (const [cid, jours] of Object.entries(E.horaire)) (jours || []).forEach((cours, jour) => { for (const c of cours || []) { if (!c.id) c.id = nouvelId(); L.horaire.push({ id: c.id, classe_id: cid, jour, debut: c.debut, fin: c.fin, matiere: c.matiere, salle: c.salle || "", prof: c.prof || "", pause: !!c.pause }); } });
+  L.calendrier = E.calendrier.map((e) => ({ id: e.id, date: e.date, type: e.type || "sortie", titre: e.titre, detail: e.detail || "", classe_id: e.classeId || null }));
+  L.ecole = { id: 1, nom: d.ecole.nom || "", compteur: d.compteur || 0, recu: E.recu || 0 };
+  return L;
+}
+function instantaneDe(L) {
+  const o = {};
+  for (const t of ORDRE) { o[t] = new Map(); for (const r of L[t]) o[t].set(cleLigne(t, r), { json: JSON.stringify(r), r }); }
+  o.ecoleJson = JSON.stringify(L.ecole);
+  return o;
+}
+
+function depuis(T) {
+  const nd = { eleves: [], classes: [], enseignants: [], matieres: [], notes: {}, espace: espaceVide(), compteur: 0, ecole: { nom: "" } };
+  const e0 = T.ecole[0] || {};
+  nd.ecole.nom = e0.nom || ""; nd.compteur = Number(e0.compteur) || 0; nd.espace.recu = Number(e0.recu) || 0;
+  nd.enseignants = T.enseignants.map((e) => ({ id: e.id, nom: e.nom, telephone: e.telephone || "" }));
+  nd.classes = T.classes.map((c) => ({ id: c.id, nom: c.nom, titulaireId: c.titulaire_id || "" }));
+  nd.matieres = T.matieres.map((m) => ({ id: m.id, classeId: m.classe_id, nom: m.nom, max: Number(m.maximum), enseignantId: m.enseignant_id || "" }));
+  const nomClasse = new Map(nd.classes.map((c) => [c.id, c.nom]));
+  nd.eleves = T.eleves.map((x) => ({ id: x.id, matricule: x.matricule, nom: x.nom, postnom: x.postnom || "", prenom: x.prenom, sexe: x.sexe, naissance: x.naissance || "", classe: nomClasse.get(x.classe_id) || "", tuteur: x.tuteur || "", telephone: x.telephone || "" }));
+  for (const n of T.notes) nd.notes[n.eleve_id + "|" + n.matiere_id + "|" + n.periode] = Number(n.valeur);
+  nd.espace.presences = T.presences.map((p) => ({ eleveId: p.eleve_id, date: p.date, statut: p.statut }));
+  for (const f of T.frais) nd.espace.frais[f.eleve_id] = { total: Number(f.total), echeance: f.echeance || "", paiements: [] };
+  for (const p of T.paiements) { const f = nd.espace.frais[p.eleve_id]; if (f) f.paiements.push({ id: p.id, date: p.date, montant: Number(p.montant), recu: p.recu }); }
+  nd.espace.devoirs = T.devoirs.map((x) => ({ id: x.id, classeId: x.classe_id, matiere: x.matiere, titre: x.titre, pour: x.pour, prof: x.prof || "" }));
+  nd.espace.messages = T.messages.map((m) => ({ id: m.id, date: m.date, de: m.de, titre: m.titre, texte: m.texte, cible: m.cible || "" }));
+  for (const h of [...T.horaire].sort((a, b) => String(a.debut).localeCompare(String(b.debut)))) {
+    (nd.espace.horaire[h.classe_id] = nd.espace.horaire[h.classe_id] || [[], [], [], [], []])[h.jour].push({ id: h.id, debut: h.debut, fin: h.fin, matiere: h.matiere, salle: h.salle || "", prof: h.prof || "", pause: !!h.pause });
+  }
+  nd.espace.calendrier = T.calendrier.map((e) => ({ id: e.id, date: e.date, type: e.type, titre: e.titre, detail: e.detail || "", classeId: e.classe_id || "" }));
+  return nd;
+}
+
+async function lireTable(t) {
+  const sortie = []; const tri = TRI[t] || ["id"];
+  for (let debut = 0; ; debut += 1000) {
+    let q = sb.from(t).select("*");
+    for (const c of tri) q = q.order(c);
+    const { data, error } = await q.range(debut, debut + 999);
+    if (error) throw error;
+    sortie.push(...data);
+    if (data.length < 1000) break;
+  }
+  return sortie;
+}
+async function tirerTout() {
+  const T = {};
+  for (const t of [...ORDRE, "ecole"]) T[t] = await lireTable(t);
+  return T;
+}
+
+// Envoie à la base uniquement ce qui a changé depuis la dernière synchronisation.
+async function pousser() {
+  const v = versionLocale;
+  const L = lignes(donnees), cur = instantaneDe(L);
+  // 1) suppressions (des tables "enfants" vers les "parents")
+  for (const t of [...ORDRE].reverse()) {
+    const prev = instantane[t] || new Map();
+    const sup = [...prev.entries()].filter(([k]) => !cur[t].has(k)).map(([, x]) => x.r);
+    if (!sup.length) continue;
+    if (colonnesCle(t).length === 1 && t !== "frais") {
+      for (let i = 0; i < sup.length; i += 200) { const { error } = await sb.from(t).delete().in("id", sup.slice(i, i + 200).map((r) => r.id)); if (error) throw error; }
+    } else {
+      for (let i = 0; i < sup.length; i += 20) {
+        const res = await Promise.all(sup.slice(i, i + 20).map((r) => { const m = {}; for (const c of colonnesCle(t)) m[c] = r[c]; return sb.from(t).delete().match(m); }));
+        for (const x of res) if (x.error) throw x.error;
+      }
+    }
+    for (const r of sup) prev.delete(cleLigne(t, r));
+    instantane[t] = prev;
+  }
+  // 2) ajouts et modifications (des tables "parents" vers les "enfants")
+  if (instantane.ecoleJson !== cur.ecoleJson) {
+    const { error } = await sb.from("ecole").upsert(L.ecole); if (error) throw error; instantane.ecoleJson = cur.ecoleJson;
+  }
+  for (const t of ORDRE) {
+    const prev = instantane[t] || new Map();
+    const maj = [...cur[t].entries()].filter(([k, x]) => !prev.has(k) || prev.get(k).json !== x.json);
+    for (let i = 0; i < maj.length; i += 400) {
+      const lot = maj.slice(i, i + 400);
+      const { error } = await sb.from(t).upsert(lot.map(([, x]) => x.r), { onConflict: colonnesCle(t).join(",") });
+      if (error) throw error;
+      for (const [k, x] of lot) prev.set(k, x);
+    }
+    instantane[t] = prev;
+  }
+  return v;
+}
+
+function messageErreur(e) {
+  const t = String((e && e.message) || e || "");
+  if (/Failed to fetch|NetworkError|Load failed/i.test(t)) return "Hors ligne : modifications gardées sur ce téléphone";
+  if (/row-level security|permission/i.test(t)) return "Non autorisé : ce compte n'est pas administrateur";
+  return "Erreur de synchronisation : " + t.slice(0, 120);
+}
+function synchroniser() {
+  const p = fileSync.then(async () => {
+    if (!sb || !compte) return false;
+    try {
+      const v = await pousser();
+      ecrireLocal(); // enregistre aussi les identifiants créés pendant l'envoi
+      if (v === versionLocale) { try { localStorage.removeItem(CLE_ATT); } catch (e) {} etatNuage("En ligne ✓"); }
+      return true;
+    } catch (e) {
+      etatNuage(messageErreur(e), true);
+      clearTimeout(minuteurSync); minuteurSync = setTimeout(synchroniser, 30000);
+      return false;
+    }
+  });
+  fileSync = p; return p;
+}
+function planifierSync() {
+  if (!sb || !compte) return;
+  versionLocale++;
+  try { localStorage.setItem(CLE_ATT, "1"); } catch (e) {}
+  etatNuage("Synchronisation…");
+  clearTimeout(minuteurSync); minuteurSync = setTimeout(synchroniser, 700);
+}
+
+function montrerConnexion(erreur) { $("connexion").hidden = false; $("cx-erreur").textContent = erreur || ""; $("cx-ok").disabled = false; setTimeout(() => $("cx-email").focus(), 50); }
+function afficherTout() { declarerClassesDesEleves(); $("r-nom").value = donnees.ecole.nom; afficher(); route(false); }
+function copieLocale() { try { localStorage.setItem(CLE + "-avant-base", JSON.stringify(donnees)); } catch (e) {} }
+const aDesDonnees = (d) => d.eleves.length || d.classes.length || d.enseignants.length;
+
+async function ouvrirSession(session) {
+  compte = session.user;
+  const { data: pr, error } = await sb.from("profils").select("role").eq("user_id", compte.id).maybeSingle();
+  if (error) throw error;
+  if (!pr || pr.role !== "admin") { await sb.auth.signOut(); compte = null; montrerConnexion("Ce compte n'est pas administrateur de l'école."); return; }
+  $("connexion").hidden = true;
+  $("carte-nuage").hidden = false; $("carte-familles").hidden = false;
+  $("nuage-compte").textContent = "Connecté : " + (compte.email || "");
+  etatNuage("Chargement…");
+  const distant = depuis(await tirerTout());
+  const distantVide = !aDesDonnees(distant), local = aDesDonnees(donnees);
+  let envoyer = false;
+  if (distantVide && local) {
+    if (confirm("La base en ligne est vide. Envoyer les données de ce téléphone (" + donnees.eleves.length + " élève(s), " + donnees.classes.length + " classe(s)) vers la base ?")) { instantane = instantaneDe(lignes(depuis({ ...Object.fromEntries(ORDRE.map((t) => [t, []])), ecole: [] }))); envoyer = true; }
+  } else if (local && localStorage.getItem(CLE_ATT) === "1" && confirm("Des modifications faites sans connexion n'ont pas été envoyées.\n\nOK = les envoyer (ce téléphone fait foi)\nAnnuler = reprendre les données de la base")) {
+    instantane = instantaneDe(lignes(distant)); envoyer = true;
+  }
+  if (!envoyer) {
+    if (local) copieLocale();
+    donnees = distant; instantane = instantaneDe(lignes(distant)); ecrireLocal();
+    try { localStorage.removeItem(CLE_ATT); } catch (e) {}
+  }
+  afficherTout();
+  if (envoyer) { versionLocale++; await synchroniser(); } else etatNuage("En ligne ✓");
+}
+
+async function demarrerNuage() {
+  if (!CFG || !CFG.url || !CFG.key) return;
+  if (!window.supabase) { etatNuage("Mode local : la bibliothèque en ligne n'a pas pu être chargée", true); return; }
+  if (!sb) sb = window.supabase.createClient(CFG.url, CFG.key, { auth: { persistSession: true, autoRefreshToken: true } });
+  $("connexion").hidden = false;
+  try {
+    const { data, error } = await sb.auth.getSession();
+    if (error) throw error;
+    if (!data.session) { montrerConnexion(); return; }
+    await ouvrirSession(data.session);
+  } catch (e) {
+    if (!navigator.onLine || /Failed to fetch|NetworkError|Load failed/i.test(String(e && e.message))) { $("connexion").hidden = true; etatNuage("Hors ligne : données de ce téléphone", true); }
+    else montrerConnexion("Erreur : " + String((e && e.message) || e).slice(0, 120));
+  }
+}
+
+$("cx-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("cx-ok").disabled = true; $("cx-erreur").textContent = "Connexion…";
+  try {
+    const { data, error } = await sb.auth.signInWithPassword({ email: $("cx-email").value.trim(), password: $("cx-mdp").value });
+    if (error) { montrerConnexion(/Invalid login/i.test(error.message) ? "Email ou mot de passe incorrect." : error.message); return; }
+    $("cx-mdp").value = "";
+    await ouvrirSession(data.session);
+  } catch (err) { montrerConnexion(messageErreur(err)); }
+});
+$("nuage-sync").addEventListener("click", async () => { etatNuage("Synchronisation…"); const ok = await synchroniser(); message(ok ? "Données envoyées à la base." : "Envoi impossible pour le moment."); });
+$("nuage-tirer").addEventListener("click", async () => {
+  if (!confirm("Remplacer les données de ce téléphone par celles de la base ?")) return;
+  try { etatNuage("Chargement…"); copieLocale(); donnees = depuis(await tirerTout()); instantane = instantaneDe(lignes(donnees)); ecrireLocal(); try { localStorage.removeItem(CLE_ATT); } catch (e) {} afficherTout(); etatNuage("En ligne ✓"); message("Données rechargées."); }
+  catch (e) { etatNuage(messageErreur(e), true); }
+});
+$("nuage-sortir").addEventListener("click", async () => {
+  if (localStorage.getItem(CLE_ATT) === "1") { etatNuage("Synchronisation…"); const ok = await synchroniser(); if (!ok && !confirm("Des modifications ne sont pas encore envoyées. Se déconnecter les perdrait. Continuer ?")) return; }
+  await sb.auth.signOut(); compte = null;
+  try { localStorage.removeItem(CLE); localStorage.removeItem(CLE_ATT); } catch (e) {}
+  donnees = charger(); instantane = {}; etatNuage(""); afficherTout();
+  $("carte-nuage").hidden = true; $("carte-familles").hidden = true; montrerConnexion();
+});
+window.addEventListener("online", () => { if (sb && compte) synchroniser(); else if (sb && $("connexion").hidden === true) demarrerNuage(); });
+
+// Accès des familles : codes générés par la base, visibles ici seulement.
+function texteAcces(x, code) {
+  return "Espace parents de " + (donnees.ecole.nom || "l'école") + "\nÉlève : " + x.prenom + " " + x.nom + "\nMatricule : " + x.matricule + "\nCode d'accès : " + code + (CFG && CFG.espaceUrl ? "\nLien : " + CFG.espaceUrl : "");
+}
+async function afficherCodes() {
+  const zone = $("codes-liste"); zone.replaceChildren();
+  const { data, error } = await sb.from("codes_acces").select("eleve_id, code");
+  if (error) { message(messageErreur(error)); return; }
+  const parEleve = new Map(data.map((c) => [c.eleve_id, c.code]));
+  const liste = donnees.eleves.filter((x) => parEleve.has(x.id)).sort((a, b) => comparer(a.classe, b.classe) || a.nom.localeCompare(b.nom, "fr"));
+  if (!liste.length) { zone.appendChild(el("p", "info", "Aucun code pour le moment. Appuie sur « Générer les codes manquants ».")); return; }
+  for (const x of liste) {
+    const code = parEleve.get(x.id);
+    const l = el("div", "ligne"); const c = el("div", "corps");
+    c.append(el("div", "", nomComplet(x) + " · " + x.classe), el("div", "info", x.matricule + " · code " + code));
+    const b = bouton("Envoyer", "petit", async () => {
+      const t = texteAcces(x, code);
+      try { if (navigator.share) await navigator.share({ text: t }); else { await navigator.clipboard.writeText(t); message("Message copié."); } }
+      catch (e) { /* partage annulé */ }
+    });
+    b.setAttribute("aria-label", "Envoyer l'accès de " + nomComplet(x));
+    l.append(c, b); zone.appendChild(l);
+  }
+}
+$("codes-generer").addEventListener("click", async () => {
+  etatNuage("Synchronisation…");
+  if (!(await synchroniser())) { message("Envoie d'abord les données à la base (connexion nécessaire)."); return; }
+  const { data, error } = await sb.rpc("generer_codes");
+  if (error) { message(messageErreur(error)); return; }
+  message(data + " code(s) créé(s)."); await afficherCodes();
+});
+$("codes-voir").addEventListener("click", afficherCodes);
+
+declarerClassesDesEleves();
+$("r-nom").value = donnees.ecole.nom;
+afficher();
+route(false);
+demarrerNuage();
+</script>
+</body>
+</html>

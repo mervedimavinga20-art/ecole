@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>École · Accueil</title>
+<style>
+  :root { --fond: #f2f5f6; --carte: #fff; --texte: #12212b; --discret: #566873; --bord: #d9e1e5; --marque: #12364f; --accent: #0b7a75; }
+  @media (prefers-color-scheme: dark) { :root { --fond: #0d1820; --carte: #14232e; --texte: #e6eef3; --discret: #9db0bc; --bord: #29404f; --marque: #0a2233; --accent: #4cc2bb; } }
+  body { margin: 0; background: var(--fond); color: var(--texte); font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 520px; margin: 0 auto; padding: 48px 20px; display: flex; flex-direction: column; gap: 14px; }
+  h1 { margin: 0 0 4px; font-size: 28px; }
+  p { margin: 0; color: var(--discret); }
+  a.choix { display: block; text-decoration: none; color: inherit; background: var(--carte); border: 1px solid var(--bord); border-radius: 14px; padding: 18px; min-height: 44px; }
+  a.choix b { display: block; font-size: 19px; color: var(--accent); }
+  a.choix span { color: var(--discret); font-size: 14px; }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Gestion de l'école</h1>
+  <p>Choisis ton espace.</p>
+  <a class="choix" href="admin.html"><b>Administration</b><span>Élèves, classes, notes, présences, frais, devoirs, messages, horaire, calendrier.</span></a>
+  <a class="choix" href="espace.html"><b>Espace élèves et parents</b><span>Notes, présences, frais, devoirs, messages et documents d'un élève.</span></a>
+  <p style="font-size:13.5px">Les deux applications partagent les données de ce téléphone. Pour qu'elles se voient, ouvre-les par ce même dossier, avec le même navigateur.</p>
+</main>
+</body>
+</html>
