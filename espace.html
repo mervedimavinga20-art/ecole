@@ -85,6 +85,11 @@
   .date { flex: none; width: 56px; border-radius: 10px; background: var(--marque); color: var(--sur-marque); text-align: center; padding: 6px 0; }
   .date b { display: block; font-size: 22px; line-height: 1.1; }
   .date span { font-size: 12px; color: var(--clair-marque); }
+  .bulle { max-width: 88%; padding: 9px 12px; border-radius: 14px; background: var(--doux); overflow-wrap: anywhere; white-space: pre-wrap; }
+  .bulle.moi { align-self: flex-end; background: var(--marque); color: var(--sur-marque); }
+  .bulle small { display: block; opacity: .75; font-size: 12px; margin-top: 3px; }
+  .fil { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 14px; }
+  textarea { width: 100%; min-height: 96px; padding: 10px 12px; border: 1px solid var(--bord); border-radius: 10px; background: var(--carte); font: inherit; resize: vertical; margin-bottom: 10px; }
   .point { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); flex: none; }
   details.msg { border-top: 1px solid var(--bord); padding: 4px 0; }
   details.msg:first-of-type { border-top: 0; }
@@ -127,10 +132,11 @@ const ICONES = {
   devoirs: "M5 4h14v16H5zM9 9h6M9 13h6M9 17h3",
   horaire: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2",
   calendrier: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4",
-  documents: "M4 6h6l2 2h8v11H4z"
+  documents: "M4 6h6l2 2h8v11H4z",
+  contact: "M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12zM8.5 11h7M8.5 14h4"
 };
 const TITRES = { accueil: "Accueil", notes: "Notes et bulletin", presences: "Présences", messages: "Messages de l'école", frais: "Frais scolaires",
-  devoirs: "Devoirs", horaire: "Horaire des cours", calendrier: "Calendrier scolaire", documents: "Documents" };
+  devoirs: "Devoirs", horaire: "Horaire des cours", calendrier: "Calendrier scolaire", documents: "Documents", contact: "Contacter l'école" };
 const ONGLETS = ["accueil", "notes", "presences", "messages", "frais"];
 const LIBELLES = { accueil: "Accueil", notes: "Notes", presences: "Présences", messages: "Messages", frais: "Frais" };
 
@@ -238,7 +244,7 @@ function evenements(x) {
 
 // ---------- Navigation ----------
 const pageActuelle = () => { const h = location.hash.slice(1); return TITRES[h] ? h : "accueil"; };
-window.addEventListener("hashchange", () => { rendre(); window.scrollTo(0, 0); });
+window.addEventListener("hashchange", () => { rendre(); window.scrollTo(0, 0); if (typeof rafraichirEchanges === "function") rafraichirEchanges(); });
 
 function entete(page, x) {
   const h = el("header", "haut");
@@ -256,7 +262,7 @@ function barre(page) {
   const d = el("div");
   for (const o of ONGLETS) {
     const a = el("a"); a.href = "#" + o; a.append(icone(o), el("span", "", LIBELLES[o]));
-    if (o === page) a.setAttribute("aria-current", "page");
+    if (o === (page === "contact" ? "messages" : page)) a.setAttribute("aria-current", "page");
     d.appendChild(a);
   }
   n.appendChild(d); return n;
@@ -272,7 +278,7 @@ function rendre() {
   const page = pageActuelle();
   app.appendChild(entete(page, x));
   const c = el("main", "contenu"); app.appendChild(c);
-  ({ accueil: pAccueil, notes: pNotes, presences: pPresences, messages: pMessages, frais: pFrais, devoirs: pDevoirs, horaire: pHoraire, calendrier: pCalendrier, documents: pDocuments })[page](c, x);
+  ({ accueil: pAccueil, notes: pNotes, presences: pPresences, messages: pMessages, frais: pFrais, devoirs: pDevoirs, horaire: pHoraire, calendrier: pCalendrier, documents: pDocuments, contact: pContact })[page](c, x);
   app.appendChild(barre(page));
 }
 
@@ -343,7 +349,7 @@ function pAccueil(c, x) {
   e.append(av, tx); t.appendChild(e); c.appendChild(t);
 
   const p = dernierePeriode(x), r = resultat(x, matieresDe(x), p), cl = classement(x, p);
-  const pr = presenceStats(x), fr = fraisDe(x), nonLus = messagesDe(x).filter((m) => !S.lus.includes(m.id)).length;
+  const pr = presenceStats(x), fr = fraisDe(x), nonLus = messagesDe(x).filter((m) => !S.lus.includes(m.id)).length + (S.echanges || []).filter((e) => e.eleve_id === x.id && e.de === "ecole" && !e.lu_famille).length;
   const prochainDevoir = devoirsDe(x).find((d) => d.pour >= aujourdhui() && !S.faits.includes(d.id));
   const vital = (page, valeur, lib, note) => { const a = el("a", "vital"); a.href = "#" + page; a.append(el("b", "", valeur), el("span", "", lib)); if (note) a.appendChild(el("span", "", note)); return a; };
   const v = el("div", "vitaux");
@@ -363,6 +369,7 @@ function pAccueil(c, x) {
 
   const g = el("div", "tuiles");
   for (const o of ["devoirs", "horaire", "calendrier", "documents"]) { const a = el("a", "tuile"); a.href = "#" + o; a.append(icone(o), el("span", "", TITRES[o].replace(" de l'école", "").replace(" et bulletin", ""))); g.appendChild(a); }
+  const tc = el("a", "tuile"); tc.href = "#contact"; tc.style.gridColumn = "1 / -1"; tc.append(icone("contact"), el("span", "", "Contacter l'école")); g.appendChild(tc);
   c.appendChild(g);
   if (nuage) {
     if (liste("eleves").length > 1) c.appendChild(bouton("Changer d'élève", "second", () => { S.matricule = ""; sauver(); rendre(); }));
@@ -429,6 +436,7 @@ function pPresences(c, x) {
 
 // ---------- Écran 4 : Messages ----------
 function pMessages(c, x) {
+  const w = el("a", "tuile"); w.href = "#contact"; w.style.minHeight = "56px"; w.style.flexDirection = "row"; w.style.gap = "10px"; w.append(icone("contact"), el("span", "", "Écrire à l'école")); c.appendChild(w);
   const k = carte(); const ms = messagesDe(x);
   if (!ms.length) { k.appendChild(el("p", "vide", "Aucun message pour le moment.")); c.appendChild(k); return; }
   for (const m of ms) {
@@ -624,6 +632,7 @@ function donneesExemple() {
 // ---------- Base de données en ligne (Supabase) ----------
 const CFG = window.SB_CONFIG;
 let sb = null, nuage = null;
+let echangesDispo = true;
 const TABLES_NUAGE = ["ecole", "eleves", "classes", "matieres", "notes", "presences", "frais", "paiements", "devoirs", "messages", "horaire", "calendrier"];
 function msgErr(e) {
   const t = String((e && e.message) || e || "");
@@ -677,6 +686,7 @@ async function chargerNuage() {
   S.lus = (await lireNuage("lus")).map((r) => r.message_id);
   S.faits = (await lireNuage("devoirs_faits")).map((r) => r.devoir_id);
   S.demandes = (await lireNuage("demandes")).map((r) => ({ eleveId: r.eleve_id, titre: r.titre, date: String(r.date).slice(0, 10) }));
+  await chargerEchanges();
   nuage.classements = {};
   for (const x of S.base.eleves) {
     nuage.classements[x.id] = {};
@@ -684,6 +694,47 @@ async function chargerNuage() {
   }
   if (!eleveActuel() && S.base.eleves.length === 1) S.matricule = S.base.eleves[0].matricule;
   nuage.etat = "pret"; sauver(); rendre();
+}
+async function chargerEchanges() {
+  try { S.echanges = await lireNuage("echanges"); }
+  catch (e) {
+    if (/echanges|schema cache|does not exist/i.test(String((e && e.message) || ""))) S.echanges = null; // messagerie pas encore activée par l'école
+    else if (!Array.isArray(S.echanges)) S.echanges = []; // problème passager : on garde ce qu'on avait
+  }
+}
+// Recharge les messages en arrière-plan ; l'écran n'est redessiné que si quelque chose a changé et si le parent n'est pas en train d'écrire.
+const signature = () => (S.echanges || []).map((e) => e.id + (e.lu_famille ? "1" : "0")).join(",");
+async function rafraichirEchanges() {
+  if (!nuage || nuage.etat !== "pret" || !sb) return;
+  const avant = signature(); await chargerEchanges();
+  if (signature() !== avant) { const t = document.querySelector("textarea"); if (!t || !t.value) rendre(); }
+}
+setInterval(rafraichirEchanges, 45000);
+const heureFR = (iso) => new Date(iso).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+function pContact(c, x) {
+  if (!nuage) { const k = carte(); k.appendChild(el("p", "vide", "La messagerie est disponible quand tu es connecté avec ton compte.")); c.appendChild(k); return; }
+  if (S.echanges === null || S.echanges === undefined) { const k = carte(); k.appendChild(el("p", "vide", "La messagerie n'est pas encore activée par l'école.")); c.appendChild(k); return; }
+  const k = carte("Conversation avec l'école");
+  k.appendChild(el("p", "info", "Écris ici une question ou un message à propos de " + (x.prenom || x.nom) + ". L'école te répondra dans cette page."));
+  const fil = el("div", "fil");
+  const msgs = S.echanges.filter((e) => e.eleve_id === x.id).sort((a, b) => String(a.cree_le).localeCompare(String(b.cree_le)));
+  if (!msgs.length) fil.appendChild(el("p", "vide", "Aucun message pour le moment."));
+  for (const m of msgs) { const b = el("div", "bulle" + (m.de === "famille" ? " moi" : ""), m.texte); b.appendChild(el("small", "", (m.de === "famille" ? "Toi" : "École") + " · " + heureFR(m.cree_le))); fil.appendChild(b); }
+  k.appendChild(fil);
+  const zone = el("textarea"); zone.maxLength = 2000; zone.setAttribute("aria-label", "Ton message à l'école"); zone.placeholder = "Ton message…";
+  const envoyer = bouton("Envoyer", "principal", async () => {
+    const t = zone.value.trim(); if (!t) { dire("Écris ton message."); return; }
+    envoyer.disabled = true;
+    const { error } = await sb.from("echanges").insert({ eleve_id: x.id, user_id: nuage.user.id, de: "famille", texte: t, lu_famille: true });
+    if (error) { envoyer.disabled = false; dire(/Trop de messages/i.test(error.message) ? "Trop de messages envoyés. Réessaie plus tard." : "Envoi impossible : " + msgErr(error)); return; }
+    await chargerEchanges(); rendre();
+  });
+  k.append(zone, envoyer);
+  const maj = bouton("Actualiser", "second", async () => { await chargerEchanges(); rendre(); }); maj.style.marginTop = "10px"; maj.style.width = "100%"; k.appendChild(maj);
+  c.appendChild(k);
+  if (msgs.some((m) => m.de === "ecole" && !m.lu_famille)) {
+    sb.rpc("marquer_echanges_lus", { p_eleve: x.id }).then(() => { for (const m of S.echanges) if (m.eleve_id === x.id && m.de === "ecole") m.lu_famille = true; });
+  }
 }
 async function deconnecter() { try { await sb.auth.signOut(); } catch (e) {} S.base = null; S.matricule = ""; nuage = { etat: "connexion", user: null, msg: "", mode: "connexion", classements: {} }; try { localStorage.removeItem(CLE_NUAGE); } catch (e) {} location.hash = "#accueil"; rendre(); }
 

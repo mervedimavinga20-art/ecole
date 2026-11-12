@@ -172,6 +172,13 @@
   #cx-erreur { margin: 0; color: var(--danger); min-height: 1.3em; font-size: 14px; }
   .nuage-etat { margin-left: auto; font-size: 12.5px; text-align: right; max-width: 45%; opacity: .9; }
   .nuage-etat.alerte { color: #ffd9a0; }
+  #onglet-vie { position: relative; }
+  #onglet-vie[data-n]:not([data-n="0"])::after { content: attr(data-n); position: absolute; top: 4px; right: calc(50% - 24px); background: #c0392b; color: #fff; font-size: 10px; min-width: 16px; height: 16px; line-height: 16px; border-radius: 8px; text-align: center; padding: 0 3px; }
+  .bulle { max-width: 88%; padding: 9px 12px; border-radius: 14px; background: var(--doux); overflow-wrap: anywhere; white-space: pre-wrap; }
+  .bulle.moi { align-self: flex-end; background: var(--marque); color: var(--sur-marque); }
+  .bulle small { display: block; opacity: .75; font-size: 12px; margin-top: 3px; }
+  .fil { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+  .pastille { display: inline-block; min-width: 20px; padding: 1px 6px; border-radius: 10px; background: #c0392b; color: #fff; font-size: 12px; font-weight: 700; text-align: center; }
   .saisie.col { flex-wrap: wrap; }
   .saisie.col .qui { flex-basis: 100%; }
   .saisie.col .onglets { flex: 1; margin: 0; }
@@ -591,6 +598,7 @@ function route(defiler) {
     if (p === nom) o.setAttribute("aria-current", "page"); else o.removeAttribute("aria-current");
   }
   if (defiler) window.scrollTo(0, 0);
+  if (nom === "vie" && VIE.onglet === "boite") afficherVie();
 }
 window.addEventListener("hashchange", () => route(true));
 
@@ -1311,8 +1319,9 @@ $("n-classe").addEventListener("change", afficherNotes);
 $("n-periode").addEventListener("change", afficherNotes);
 
 // ---------- 10c. Vie scolaire (présences, frais, devoirs, messages, horaire, calendrier) ----------
-const VIE = { onglet: "presences", classeId: "", date: "", eleveId: "", jour: 0 };
-const VIE_ONGLETS = [["presences", "Présences"], ["frais", "Frais"], ["devoirs", "Devoirs"], ["messages", "Messages"], ["horaire", "Horaire"], ["calendrier", "Calendrier"]];
+const VIE = { onglet: "boite", classeId: "", date: "", eleveId: "", jour: 0 };
+const VIE_ONGLETS = [["boite", "Boîte"], ["presences", "Présences"], ["frais", "Frais"], ["devoirs", "Devoirs"], ["messages", "Messages"], ["horaire", "Horaire"], ["calendrier", "Calendrier"]];
+const BOITE = { nonLus: 0, eleveId: "", lignes: [], manquante: false };
 const JOURS_COURTS = ["Lun", "Mar", "Mer", "Jeu", "Ven"];
 const TYPES_EVENEMENT = [["sortie", "Sortie"], ["reunion", "Réunion"], ["examen", "Examens"], ["conge", "Congé"], ["frais", "Frais"]];
 const dateAjd = () => new Date().toISOString().slice(0, 10);
@@ -1517,11 +1526,74 @@ function vCalendrier(z) {
   z.appendChild(lst);
 }
 
+// Boîte de réception : messages des familles et réponses de l'école (nécessite la connexion à la base).
+const heureFR = (iso) => new Date(iso).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+function majBadgeBoite() {
+  const n = BOITE.nonLus; const v = $("onglet-vie"); if (v) v.dataset.n = String(n);
+  const b = document.querySelector('[data-vie="boite"]'); if (b) b.textContent = n ? "Boîte (" + n + ")" : "Boîte";
+}
+async function chargerBoite() {
+  if (!sb || !compte) throw new Error("hors ligne");
+  const { data, error } = await sb.from("echanges").select("*").order("cree_le");
+  if (error) { if (/echanges|schema cache|does not exist/i.test(error.message || "")) BOITE.manquante = true; throw error; }
+  BOITE.manquante = false; BOITE.lignes = data; BOITE.nonLus = data.filter((m) => m.de === "famille" && !m.lu_ecole).length; majBadgeBoite();
+}
+async function rafraichirBoite() { try { await chargerBoite(); } catch (e) { /* hors ligne ou pas encore activée */ } }
+setInterval(() => { if (sb && compte) rafraichirBoite(); }, 60000);
+
+async function vBoite(z) {
+  if (!sb || !compte) { z.appendChild(el("p", "info", "La boîte de réception demande la connexion à la base en ligne.")); return; }
+  z.appendChild(el("p", "info", "Chargement…"));
+  try { await chargerBoite(); } catch (e) {
+    z.replaceChildren(el("p", "info", BOITE.manquante ? "La messagerie n'est pas encore activée : lance le fichier supabase_messagerie.sql dans Supabase (SQL Editor)." : "Impossible de charger la boîte : " + messageErreur(e)));
+    return;
+  }
+  z.replaceChildren();
+  const rafraichir = bouton("Actualiser", "petit", () => { vieRendre(); });
+  if (!BOITE.eleveId) {
+    const parEleve = new Map();
+    for (const m of BOITE.lignes) { const g = parEleve.get(m.eleve_id) || { dernier: m, nonLus: 0 }; g.dernier = m; if (m.de === "famille" && !m.lu_ecole) g.nonLus++; parEleve.set(m.eleve_id, g); }
+    if (!parEleve.size) { z.append(el("p", "info", "Aucun message de famille pour le moment. Les parents écrivent depuis la page « Contacter l'école » de l'espace parents."), rafraichir); return; }
+    const liste = el("div", "vie-liste");
+    for (const [id, g] of [...parEleve.entries()].sort((a, b) => b[1].dernier.cree_le.localeCompare(a[1].dernier.cree_le))) {
+      const x = donnees.eleves.find((y) => y.id === id);
+      const l = el("div", "ligne"); const c = el("div", "corps");
+      const titre = el("div", ""); titre.append(document.createTextNode(x ? nomComplet(x) + " · " + x.classe : "Élève supprimé"));
+      if (g.nonLus) { titre.append(document.createTextNode(" "), el("span", "pastille", String(g.nonLus))); }
+      c.append(titre, el("div", "info", (g.dernier.de === "ecole" ? "Vous : " : "") + g.dernier.texte.slice(0, 70) + " · " + heureFR(g.dernier.cree_le)));
+      const b = bouton("Ouvrir", "petit", () => { BOITE.eleveId = id; vieRendre(); }); b.setAttribute("aria-label", "Ouvrir la conversation de " + (x ? nomComplet(x) : "cet élève"));
+      l.append(c, b); liste.appendChild(l);
+    }
+    z.append(liste, rafraichir); return;
+  }
+  const id = BOITE.eleveId, x = donnees.eleves.find((y) => y.id === id);
+  z.appendChild(bouton("← Retour à la boîte", "petit", () => { BOITE.eleveId = ""; vieRendre(); }));
+  z.appendChild(el("h3", "", x ? nomComplet(x) : "Élève supprimé"));
+  if (x) z.appendChild(el("p", "info", x.classe + " · " + x.matricule + (x.tuteur ? " · " + x.tuteur : "") + (x.telephone ? " · " + x.telephone : "")));
+  const fil = el("div", "fil");
+  for (const m of BOITE.lignes.filter((y) => y.eleve_id === id)) { const b = el("div", "bulle" + (m.de === "ecole" ? " moi" : ""), m.texte); b.appendChild(el("small", "", (m.de === "ecole" ? "École" : "Famille") + " · " + heureFR(m.cree_le))); fil.appendChild(b); }
+  z.appendChild(fil);
+  const zone = el("textarea"); zone.maxLength = 2000; zone.setAttribute("aria-label", "Réponse à la famille"); zone.placeholder = "Écris ta réponse…";
+  const envoyer = bouton("Envoyer la réponse", "principal", async () => {
+    const t = zone.value.trim(); if (!t) { message("Écris ta réponse."); return; }
+    envoyer.disabled = true;
+    const { error } = await sb.from("echanges").insert({ eleve_id: id, de: "ecole", texte: t, lu_ecole: true });
+    if (error) { envoyer.disabled = false; message(messageErreur(error)); return; }
+    vieRendre();
+  });
+  z.append(zone, envoyer, rafraichir);
+  if (BOITE.lignes.some((m) => m.eleve_id === id && m.de === "famille" && !m.lu_ecole)) {
+    sb.rpc("marquer_echanges_lus", { p_eleve: id }).then(() => { for (const m of BOITE.lignes) if (m.eleve_id === id && m.de === "famille") m.lu_ecole = true; BOITE.nonLus = BOITE.lignes.filter((m) => m.de === "famille" && !m.lu_ecole).length; majBadgeBoite(); });
+  }
+}
+function vieRendre() { afficherVie(); }
+
 function afficherVie() {
   const bar = $("vie-onglets"); bar.replaceChildren();
-  for (const [v, t] of VIE_ONGLETS) { const b = bouton(t, "", () => { VIE.onglet = v; afficherVie(); }); b.setAttribute("aria-pressed", String(VIE.onglet === v)); bar.appendChild(b); }
+  for (const [v, t] of VIE_ONGLETS) { const b = bouton(v === "boite" && BOITE.nonLus ? t + " (" + BOITE.nonLus + ")" : t, "", () => { VIE.onglet = v; BOITE.eleveId = ""; afficherVie(); }); b.dataset.vie = v; b.setAttribute("aria-pressed", String(VIE.onglet === v)); bar.appendChild(b); }
   const z = $("vie-contenu"); z.replaceChildren();
-  ({ presences: vPresences, frais: vFrais, devoirs: vDevoirs, messages: vMessages, horaire: vHoraire, calendrier: vCalendrier })[VIE.onglet](z);
+  if (VIE.onglet === "boite" && $("page-vie").hidden) return; // pas de requête réseau si la page Vie n'est pas affichée
+  ({ boite: vBoite, presences: vPresences, frais: vFrais, devoirs: vDevoirs, messages: vMessages, horaire: vHoraire, calendrier: vCalendrier })[VIE.onglet](z);
 }
 
 // ---------- 10d. Données de test (identifiants "ex-...", faciles à supprimer) ----------
@@ -1845,6 +1917,7 @@ async function ouvrirSession(session) {
   }
   afficherTout();
   if (envoyer) { versionLocale++; await synchroniser(); } else etatNuage("En ligne ✓");
+  rafraichirBoite();
 }
 
 async function demarrerNuage() {
