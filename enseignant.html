@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net https://unpkg.com 'sha256-oZOBc7F+eu9w64Lzfm9ViS61l6cKIvbFKhHkprGCTzM=' 'sha256-CmMwnPrdThR61dsY6glCwliLw/ecQXuiksKNiibBD4o=' 'sha256-7eVPOXWeJ4F7f/CHO1cQrN/nIRCH98EIxnTFVoXHk+A='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; manifest-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net https://unpkg.com 'sha256-oZOBc7F+eu9w64Lzfm9ViS61l6cKIvbFKhHkprGCTzM=' 'sha256-CmMwnPrdThR61dsY6glCwliLw/ecQXuiksKNiibBD4o=' 'sha256-W+xIRl7yn78SSbxsSwEwJUEwVOh+jatjiEWv53rSSy0='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; manifest-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="referrer" content="no-referrer">
 <title>Espace enseignant</title>
@@ -171,20 +171,21 @@ async function sortir(message) {
   location.hash = "#accueil"; rendre();
 }
 async function chargerCompte() {
-  const { data: lien, error } = await sb.from("enseignant_comptes").select("enseignant_id").maybeSingle(); if (error) throw error;
+  const { data: lien, error } = await sb.from("enseignant_comptes").select("enseignant_id").eq("user_id", E.user.id).maybeSingle(); if (error) throw error;
   if (!lien) { E.etat = "rattacher"; E.msg = ""; return rendre(); }
   E.etat = "attente"; rendre();
   const [ens, ecole, classes, matieres, eleves] = await Promise.all([
-    sb.from("enseignants").select("id, nom").maybeSingle(),
+    sb.from("enseignants").select("id, nom").eq("id", lien.enseignant_id).maybeSingle(),
     sb.from("ecole").select("nom").maybeSingle(),
     sb.from("classes").select("id, nom, titulaire_id").order("nom"),
-    sb.from("matieres").select("id, classe_id, nom, maximum").order("nom"),
+    sb.from("matieres").select("id, classe_id, nom, maximum").eq("enseignant_id", lien.enseignant_id).order("nom"),
     sb.rpc("ens_liste_eleves")
   ]);
   for (const r of [ens, ecole, classes, matieres, eleves]) if (r.error) throw r.error;
   E.ens = ens.data || { id: lien.enseignant_id, nom: "" }; E.ecole = (ecole.data && ecole.data.nom) || "";
-  E.classes = (classes.data || []).slice().sort((a, b) => comparer(a.nom, b.nom));
+  // Un compte administrateur voit tout côté base : on ne garde ici que ce qui concerne CET enseignant.
   E.matieres = (matieres.data || []).map((m) => ({ ...m, maximum: Number(m.maximum) }));
+  E.classes = (classes.data || []).filter((c) => c.titulaire_id === lien.enseignant_id || E.matieres.some((m) => m.classe_id === c.id)).sort((a, b) => comparer(a.nom, b.nom));
   E.eleves = (eleves.data || []).slice().sort((a, b) => comparer(a.nom, b.nom) || comparer(a.postnom || "", b.postnom || "") || comparer(a.prenom, b.prenom));
   E.etat = "pret"; COMMUN.noterConnexion(sb, "enseignant"); veille.reprendre();
   const faites = {}; try { faites.n = await presencesDuJour(); } catch (e) { faites.n = null; }
