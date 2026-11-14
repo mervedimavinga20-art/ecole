@@ -2,9 +2,12 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net https://unpkg.com 'sha256-oZOBc7F+eu9w64Lzfm9ViS61l6cKIvbFKhHkprGCTzM=' 'sha256-CmMwnPrdThR61dsY6glCwliLw/ecQXuiksKNiibBD4o=' 'sha256-W+8uoTGhGGU5QaLTdEyWjPQhyK9KOdyIAgZ7jg/srnU='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; manifest-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none'">
+<meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Espace élèves et parents</title>
 <script src="config.js"></script>
+<script src="commun.js"></script>
 <script src="supabase.js"></script>
 <script>window.supabase || document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.93.0/dist/umd/supabase.js"><\/script>')</script>
 <script>window.supabase || document.write('<script src="https://unpkg.com/@supabase/supabase-js@2.93.0/dist/umd/supabase.js"><\/script>')</script>
@@ -374,6 +377,7 @@ function pAccueil(c, x) {
   if (nuage) {
     if (liste("eleves").length > 1) c.appendChild(bouton("Changer d'élève", "second", () => { S.matricule = ""; sauver(); rendre(); }));
     c.appendChild(bouton("Rattacher un autre élève", "second", () => { nuage.etat = "rattacher"; nuage.msg = ""; rendre(); }));
+    c.appendChild(bouton("Mon compte et sécurité", "second", () => COMMUN.ouvrirCompte(sb, { email: nuage.user && nuage.user.email, apresDeconnexion: () => deconnecter() })));
     c.appendChild(bouton("Se déconnecter", "second", deconnecter));
   } else c.appendChild(bouton("Changer d'élève", "second", () => { S.matricule = ""; sauver(); rendre(); }));
 }
@@ -631,16 +635,16 @@ function donneesExemple() {
 
 // ---------- Base de données en ligne (Supabase) ----------
 const CFG = window.SB_CONFIG;
-let sb = null, nuage = null;
+const limite = window.COMMUN ? COMMUN.limiteur("espace") : { attente: () => 0, echec() {}, succes() {} };
+let sb = null, nuage = null, veille = null;
+const INACTIVITE_MIN = 60;
 let echangesDispo = true;
 const TABLES_NUAGE = ["ecole", "eleves", "classes", "matieres", "notes", "presences", "frais", "paiements", "devoirs", "messages", "horaire", "calendrier"];
 function msgErr(e) {
+  if (window.COMMUN) return COMMUN.messageAuth(e);
   const t = String((e && e.message) || e || "");
   if (/Failed to fetch|NetworkError|Load failed/i.test(t)) return "Pas de connexion Internet.";
   if (/Invalid login/i.test(t)) return "Email ou mot de passe incorrect.";
-  if (/already registered|already been registered/i.test(t)) return "Un compte existe déjà avec cet email. Connecte-toi.";
-  if (/Password should be at least|weak/i.test(t)) return "Le mot de passe est trop court (6 caractères minimum).";
-  if (/Email not confirmed/i.test(t)) return "Confirme d'abord ton email avec le lien reçu.";
   return t.slice(0, 140);
 }
 async function ecrire(promesse) { try { const r = await promesse; if (r && r.error) throw r.error; } catch (e) { dire("Enregistrement impossible : " + msgErr(e)); } }
@@ -650,7 +654,7 @@ async function demarrerNuage() {
   if (!window.supabase) { S.local = true; rendre(); dire("Mode sans base : la bibliothèque en ligne n'a pas pu être chargée."); return; }
   try { const m = JSON.parse(localStorage.getItem(CLE_NUAGE)); S.matricule = m && typeof m.matricule === "string" ? m.matricule : ""; } catch (e) { S.matricule = ""; }
   S.base = null; S.source = ""; S.lus = []; S.faits = []; S.demandes = [];
-  sb = sb || window.supabase.createClient(CFG.url, CFG.key, { auth: { persistSession: true, autoRefreshToken: true } });
+  if (!sb) { sb = window.supabase.createClient(CFG.url, CFG.key, { auth: { persistSession: true, autoRefreshToken: true } }); if (window.COMMUN) { COMMUN.ecouterRecuperation(sb, () => demarrerNuage()); veille = COMMUN.surveillerInactivite(INACTIVITE_MIN, () => { if (nuage && nuage.user) { deconnecter().then(() => { nuage.msg = "Tu as été déconnecté après " + INACTIVITE_MIN + " minutes sans activité."; rendre(); }); } else veille.reprendre(); }); } }
   nuage = { etat: "attente", user: null, msg: "", mode: "connexion", classements: {} }; rendre();
   try {
     const { data, error } = await sb.auth.getSession(); if (error) throw error;
@@ -736,7 +740,7 @@ function pContact(c, x) {
     sb.rpc("marquer_echanges_lus", { p_eleve: x.id }).then(() => { for (const m of S.echanges) if (m.eleve_id === x.id && m.de === "ecole") m.lu_famille = true; });
   }
 }
-async function deconnecter() { try { await sb.auth.signOut(); } catch (e) {} S.base = null; S.matricule = ""; nuage = { etat: "connexion", user: null, msg: "", mode: "connexion", classements: {} }; try { localStorage.removeItem(CLE_NUAGE); } catch (e) {} location.hash = "#accueil"; rendre(); }
+async function deconnecter() { try { await sb.auth.signOut(); } catch (e) {} if (veille) veille.reprendre(); S.base = null; S.matricule = ""; nuage = { etat: "connexion", user: null, msg: "", mode: "connexion", classements: {} }; try { localStorage.removeItem(CLE_NUAGE); } catch (e) {} location.hash = "#accueil"; rendre(); }
 
 function ecranNuage(app) {
   const c = el("main", "contenu"); c.style.paddingTop = "48px";
@@ -757,8 +761,9 @@ function ecranNuage(app) {
     const err = el("p", "info", nuage.msg || ""); err.setAttribute("role", "alert");
     const ok = bouton("Rattacher", "principal", async () => {
       ok.disabled = true; err.textContent = "Vérification…";
-      const { error } = await sb.rpc("rattacher", { p_matricule: m.value, p_code: cd.value });
+      const { data: lie, error } = await sb.rpc("rattacher", { p_matricule: m.value, p_code: cd.value });
       if (error) { ok.disabled = false; err.textContent = /incorrect/i.test(error.message) ? "Matricule ou code incorrect." : msgErr(error); return; }
+      if (!lie) { ok.disabled = false; err.textContent = "Matricule ou code incorrect."; return; }
       try { await chargerNuage(); } catch (e) { nuage.etat = "erreur"; nuage.msg = msgErr(e); rendre(); }
     });
     k.append(m, cd, err, ok); c.appendChild(k);
@@ -771,21 +776,26 @@ function ecranNuage(app) {
   const k = carte(creer ? "Créer un compte" : "Connexion");
   k.appendChild(puces([["connexion", "Connexion"], ["creer", "Créer un compte"]], nuage.mode, (v) => { nuage.mode = v; nuage.msg = ""; rendre(); }, "Choix"));
   const em = el("input"); em.type = "email"; em.autocomplete = "username"; em.setAttribute("aria-label", "Email"); em.placeholder = "Email";
-  const mdp = el("input"); mdp.type = "password"; mdp.autocomplete = creer ? "new-password" : "current-password"; mdp.setAttribute("aria-label", "Mot de passe"); mdp.placeholder = creer ? "Mot de passe (6 caractères minimum)" : "Mot de passe";
+  const mdp = el("input"); mdp.type = "password"; mdp.autocomplete = creer ? "new-password" : "current-password"; mdp.setAttribute("aria-label", "Mot de passe"); mdp.placeholder = creer ? "Mot de passe (8 caractères, lettres et chiffres)" : "Mot de passe";
   em.style.margin = "12px 0 8px"; mdp.style.marginBottom = "10px";
   const err = el("p", "info", nuage.msg || ""); err.setAttribute("role", "alert");
   const ok = bouton(creer ? "Créer mon compte" : "Se connecter", "principal", async () => {
     if (!em.value.trim() || !mdp.value) { err.textContent = "Écris ton email et ton mot de passe."; return; }
+    if (creer) { const pb = COMMUN.verifierMotDePasse(mdp.value); if (pb) { err.textContent = pb; return; } }
+    else { const w = limite.attente(); if (w > 0) { err.textContent = "Trop d'essais. Réessaie dans " + w + " secondes."; return; } }
     ok.disabled = true; err.textContent = "Un instant…";
     try {
       const r = creer ? await sb.auth.signUp({ email: em.value.trim(), password: mdp.value }) : await sb.auth.signInWithPassword({ email: em.value.trim(), password: mdp.value });
-      if (r.error) { ok.disabled = false; err.textContent = msgErr(r.error); return; }
+      if (r.error) { ok.disabled = false; if (!creer) limite.echec(); err.textContent = msgErr(r.error); return; }
+      limite.succes();
       if (!r.data.session) { ok.disabled = false; err.textContent = "Compte créé. Confirme ton email avec le lien reçu, puis connecte-toi."; nuage.mode = "connexion"; return; }
       nuage.user = r.data.session.user; await chargerNuage();
     } catch (e) { ok.disabled = false; err.textContent = msgErr(e); }
   });
   mdp.addEventListener("keydown", (e) => { if (e.key === "Enter") ok.click(); });
-  k.append(em, mdp, err, ok); c.appendChild(k);
+  k.append(em, mdp, err, ok);
+  if (!creer) { const o = bouton("Mot de passe oublié ?", "second", async () => { err.textContent = "Un instant…"; err.textContent = await COMMUN.motDePasseOublie(sb, em.value); }); o.style.marginTop = "8px"; k.appendChild(o); }
+  c.appendChild(k);
   c.appendChild(bouton("Essayer avec des données d'exemple", "second", () => { S.local = true; nuage = null; S.source = ""; S.base = donneesExemple(); S.matricule = "E2026-001"; sauver(); location.hash = "#accueil"; rendre(); }));
   app.appendChild(c);
 }

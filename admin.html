@@ -2,9 +2,12 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net https://unpkg.com 'sha256-oZOBc7F+eu9w64Lzfm9ViS61l6cKIvbFKhHkprGCTzM=' 'sha256-CmMwnPrdThR61dsY6glCwliLw/ecQXuiksKNiibBD4o=' 'sha256-J6da+L1hOtyyVqllAKtGrnVIEh0ZkJXjukY/Pjzaqb8='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; manifest-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none'">
+<meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Gestion école</title>
 <script src="config.js"></script>
+<script src="commun.js"></script>
 <script src="supabase.js"></script>
 <script>window.supabase || document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.93.0/dist/umd/supabase.js"><\/script>')</script>
 <script>window.supabase || document.write('<script src="https://unpkg.com/@supabase/supabase-js@2.93.0/dist/umd/supabase.js"><\/script>')</script>
@@ -203,6 +206,7 @@
     <label>Mot de passe<input id="cx-mdp" type="password" autocomplete="current-password" required></label>
     <p id="cx-erreur" role="alert"></p>
     <button class="principal" type="submit" id="cx-ok">Se connecter</button>
+    <button type="button" id="cx-oubli">Mot de passe oublié ?</button>
   </form>
 </div>
 
@@ -347,6 +351,7 @@
       <div class="actions">
         <button type="button" id="nuage-sync">Synchroniser maintenant</button>
         <button type="button" id="nuage-tirer">Recharger depuis la base</button>
+        <button type="button" id="nuage-securite">Mon compte et sécurité</button>
         <button type="button" id="nuage-sortir" class="danger">Se déconnecter</button>
       </div>
     </section>
@@ -358,6 +363,27 @@
         <button type="button" id="codes-voir">Afficher les codes</button>
       </div>
       <div id="codes-liste" class="vie-liste"></div>
+    </section>
+    <section class="carte" id="carte-profs" hidden>
+      <h2>Accès des enseignants</h2>
+      <p class="discret" style="margin:0 0 12px">Chaque enseignant reçoit un code de 12 caractères. Il crée son compte dans l'espace enseignant puis écrit ce code (une seule fois). Il ne voit que ses classes et ses matières : jamais les frais, les téléphones ni les messages des familles. « Nouveau code » coupe l'accès de l'ancien compte.</p>
+      <div class="actions">
+        <button type="button" id="codes-ens-generer">Générer les codes manquants</button>
+        <button type="button" id="codes-ens-voir">Afficher les codes</button>
+      </div>
+      <div id="codes-ens-liste" class="vie-liste"></div>
+    </section>
+    <section class="carte" id="carte-journal" hidden>
+      <h2>Journal de sécurité</h2>
+      <p class="discret" style="margin:0 0 12px">Qui a modifié quoi : notes, paiements, frais, accès, codes, connexions. Ce journal ne peut être ni modifié ni effacé, même par toi.</p>
+      <div class="actions">
+        <button type="button" id="journal-voir">Afficher les derniers événements</button>
+        <select id="journal-filtre" aria-label="Filtrer le journal">
+          <option value="tout">Tout</option><option value="notes">Notes</option><option value="argent">Paiements et frais</option>
+          <option value="acces">Accès et codes</option><option value="connexions">Connexions et échecs</option>
+        </select>
+      </div>
+      <div id="journal-liste" class="vie-liste"></div>
     </section>
     <section class="carte">
       <h2>Données de test</h2>
@@ -1899,7 +1925,8 @@ async function ouvrirSession(session) {
   if (error) throw error;
   if (!pr || pr.role !== "admin") { await sb.auth.signOut(); compte = null; montrerConnexion("Ce compte n'est pas administrateur de l'école."); return; }
   $("connexion").hidden = true;
-  $("carte-nuage").hidden = false; $("carte-familles").hidden = false;
+  COMMUN.noterConnexion(sb, "admin"); veille.reprendre();
+  $("carte-nuage").hidden = false; $("carte-familles").hidden = false; $("carte-profs").hidden = false; $("carte-journal").hidden = false;
   $("nuage-compte").textContent = "Connecté : " + (compte.email || "");
   etatNuage("Chargement…");
   const distant = depuis(await tirerTout());
@@ -1923,7 +1950,7 @@ async function ouvrirSession(session) {
 async function demarrerNuage() {
   if (!CFG || !CFG.url || !CFG.key) return;
   if (!window.supabase) { etatNuage("Mode local : la bibliothèque en ligne n'a pas pu être chargée", true); return; }
-  if (!sb) sb = window.supabase.createClient(CFG.url, CFG.key, { auth: { persistSession: true, autoRefreshToken: true } });
+  if (!sb) { sb = window.supabase.createClient(CFG.url, CFG.key, { auth: { persistSession: true, autoRefreshToken: true } }); COMMUN.ecouterRecuperation(sb, () => demarrerNuage()); }
   $("connexion").hidden = false;
   try {
     const { data, error } = await sb.auth.getSession();
@@ -1940,9 +1967,10 @@ $("cx-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   $("cx-ok").disabled = true; $("cx-erreur").textContent = "Connexion…";
   try {
+    const w = limiteCx.attente(); if (w > 0) { montrerConnexion("Trop d'essais. Réessaie dans " + w + " secondes."); return; }
     const { data, error } = await sb.auth.signInWithPassword({ email: $("cx-email").value.trim(), password: $("cx-mdp").value });
-    if (error) { montrerConnexion(/Invalid login/i.test(error.message) ? "Email ou mot de passe incorrect." : error.message); return; }
-    $("cx-mdp").value = "";
+    if (error) { limiteCx.echec(); montrerConnexion(COMMUN.messageAuth(error)); return; }
+    limiteCx.succes(); $("cx-mdp").value = "";
     await ouvrirSession(data.session);
   } catch (err) { montrerConnexion(messageErreur(err)); }
 });
@@ -1957,7 +1985,7 @@ $("nuage-sortir").addEventListener("click", async () => {
   await sb.auth.signOut(); compte = null;
   try { localStorage.removeItem(CLE); localStorage.removeItem(CLE_ATT); } catch (e) {}
   donnees = charger(); instantane = {}; etatNuage(""); afficherTout();
-  $("carte-nuage").hidden = true; $("carte-familles").hidden = true; montrerConnexion();
+  $("carte-nuage").hidden = true; $("carte-familles").hidden = true; $("carte-profs").hidden = true; $("carte-journal").hidden = true; $("journal-liste").replaceChildren(); $("codes-liste").replaceChildren(); $("codes-ens-liste").replaceChildren(); montrerConnexion();
 });
 window.addEventListener("online", () => { if (sb && compte) synchroniser(); else if (sb && $("connexion").hidden === true) demarrerNuage(); });
 
@@ -1982,7 +2010,15 @@ async function afficherCodes() {
       catch (e) { /* partage annulé */ }
     });
     b.setAttribute("aria-label", "Envoyer l'accès de " + nomComplet(x));
-    l.append(c, b); zone.appendChild(l);
+    const nv = bouton("Nouveau code", "petit", async () => {
+      if (!confirm("Créer un nouveau code pour " + nomComplet(x) + " ?\nL'ancien code ne marchera plus.")) return;
+      const couper = confirm("Couper aussi l'accès des parents déjà rattachés à cet élève ?\n\nOK = oui (téléphone perdu ou compte prêté)\nAnnuler = non, garder les comptes actuels");
+      const { error: er } = await sb.rpc("reinitialiser_code", { p_eleve: x.id, p_revoquer: couper });
+      if (er) { message(/function .* does not exist|schema cache/i.test(er.message) ? "Mets d'abord la base à jour avec supabase_v6.sql." : messageErreur(er)); return; }
+      message(couper ? "Nouveau code créé, accès précédents coupés." : "Nouveau code créé."); await afficherCodes();
+    });
+    nv.setAttribute("aria-label", "Nouveau code pour " + nomComplet(x));
+    l.append(c, b, nv); zone.appendChild(l);
   }
 }
 $("codes-generer").addEventListener("click", async () => {
@@ -1993,6 +2029,110 @@ $("codes-generer").addEventListener("click", async () => {
   message(data + " code(s) créé(s)."); await afficherCodes();
 });
 $("codes-voir").addEventListener("click", afficherCodes);
+
+// ---------- Sécurité : veille, compte, accès des enseignants, journal ----------
+const limiteCx = COMMUN.limiteur("admin");
+const INACTIVITE_MIN = 30;
+async function finSession(raison, dejaSorti) {
+  if (!dejaSorti) { try { await sb.auth.signOut({ scope: "local" }); } catch (e) {} }
+  compte = null; clearTimeout(minuteurSync);
+  try { localStorage.removeItem(CLE); localStorage.removeItem(CLE_ATT); } catch (e) {}
+  donnees = charger(); instantane = {}; etatNuage(""); afficherTout();
+  for (const id of ["carte-nuage", "carte-familles", "carte-profs", "carte-journal"]) $(id).hidden = true;
+  for (const id of ["journal-liste", "codes-liste", "codes-ens-liste"]) $(id).replaceChildren();
+  montrerConnexion(raison || "");
+}
+const veille = COMMUN.surveillerInactivite(INACTIVITE_MIN, async () => {
+  if (!sb || !compte) { veille.reprendre(); return; }
+  if (localStorage.getItem(CLE_ATT) === "1" && !(await synchroniser())) { message("Inactif depuis " + INACTIVITE_MIN + " min, mais des modifications ne sont pas encore envoyées : session gardée."); veille.reprendre(); return; }
+  await finSession("Tu as été déconnecté après " + INACTIVITE_MIN + " minutes sans activité.");
+});
+$("nuage-securite").addEventListener("click", () => COMMUN.ouvrirCompte(sb, { email: compte && compte.email, apresDeconnexion: () => finSession("Tu as été déconnecté de tous tes appareils.", true) }));
+$("cx-oubli").addEventListener("click", async () => { $("cx-erreur").textContent = "Un instant…"; $("cx-erreur").textContent = await COMMUN.motDePasseOublie(sb, $("cx-email").value); });
+
+function texteAccesEns(e, code) {
+  return "Espace enseignant de " + (donnees.ecole.nom || "l'école") + "\nEnseignant : " + e.nom + "\nCode d'accès : " + code +
+    "\nÉtapes : ouvre le lien, crée ton compte (email + mot de passe de 8 caractères avec lettres et chiffres), puis écris ce code. Le code ne sert qu'une fois." +
+    (CFG && CFG.enseignantUrl ? "\nLien : " + CFG.enseignantUrl : "");
+}
+async function partager(texte) {
+  try { if (navigator.share) await navigator.share({ text: texte }); else { await navigator.clipboard.writeText(texte); message("Message copié."); } }
+  catch (e) { /* partage annulé */ }
+}
+async function afficherCodesEns() {
+  const zone = $("codes-ens-liste"); zone.replaceChildren();
+  const [c, l] = await Promise.all([sb.from("codes_enseignants").select("enseignant_id, code"), sb.from("enseignant_comptes").select("enseignant_id")]);
+  if (c.error || l.error) { message(messageErreur(c.error || l.error)); return; }
+  const code = new Map(c.data.map((x) => [x.enseignant_id, x.code])), lies = new Set(l.data.map((x) => x.enseignant_id));
+  const liste = donnees.enseignants.filter((e) => code.has(e.id)).sort((a, b) => comparer(a.nom, b.nom));
+  if (!liste.length) { zone.appendChild(el("p", "info", donnees.enseignants.length ? "Aucun code pour le moment. Appuie sur « Générer les codes manquants »." : "Ajoute d'abord des enseignants dans l'onglet Profs.")); return; }
+  for (const e of liste) {
+    const ligne = el("div", "ligne"), corps = el("div", "corps");
+    corps.append(el("div", "", e.nom), el("div", "info", (lies.has(e.id) ? "Compte relié ✓ · " : "En attente · ") + "code " + code.get(e.id)));
+    const envoyer = bouton("Envoyer", "petit", () => partager(texteAccesEns(e, code.get(e.id))));
+    envoyer.setAttribute("aria-label", "Envoyer l'accès de " + e.nom);
+    const nouveau = bouton("Nouveau code", "petit", async () => {
+      if (!confirm("Créer un nouveau code pour " + e.nom + " ?\nSon compte actuel perdra l'accès tout de suite.")) return;
+      const { error } = await sb.rpc("reinitialiser_enseignant", { p_ens: e.id });
+      if (error) { message(messageErreur(error)); return; }
+      message("Nouveau code créé."); await afficherCodesEns();
+    });
+    nouveau.setAttribute("aria-label", "Nouveau code pour " + e.nom);
+    ligne.append(corps, envoyer, nouveau); zone.appendChild(ligne);
+  }
+}
+$("codes-ens-generer").addEventListener("click", async () => {
+  etatNuage("Synchronisation…");
+  if (!(await synchroniser())) { message("Envoie d'abord les données à la base (connexion nécessaire)."); return; }
+  const { data, error } = await sb.rpc("generer_codes_enseignants");
+  if (error) { message(/function .* does not exist|schema cache/i.test(error.message) ? "L'espace enseignant n'est pas encore activé : lance supabase_v6.sql dans Supabase." : messageErreur(error)); return; }
+  message(data + " code(s) créé(s)."); await afficherCodesEns();
+});
+$("codes-ens-voir").addEventListener("click", afficherCodesEns);
+
+// Journal : texte clair pour chaque événement (rien n'est écrit en HTML : tout passe par textContent).
+const nomEleveDe = (id) => { const x = donnees.eleves.find((e) => e.id === id); return x ? nomComplet(x) : "élève supprimé"; };
+const nomMatiereDe = (id) => { const m = donnees.matieres.find((x) => x.id === id); return m ? m.nom : "matière"; };
+function phraseJournal(j) {
+  const d = j.detail || {}, av = d.avant || {}, ap = d.apres || {}, verbe = { insert: "ajouté", update: "modifié", delete: "supprimé" }[j.action];
+  const cle = String(j.cible || "").split("|");
+  switch (j.table_nom) {
+    case "notes": return "Note " + verbe + "e : " + nomEleveDe(cle[0]) + " · " + nomMatiereDe(cle[1]) + " · période " + (Number(cle[2]) + 1) + " · " + (j.action === "insert" ? ap.valeur : j.action === "delete" ? av.valeur + " supprimée" : (av.valeur != null ? av.valeur + " → " : "→ ") + ap.valeur);
+    case "paiements": return "Paiement " + verbe + " : " + (ap.montant != null ? ap.montant : av.montant) + " · reçu " + (ap.recu || av.recu || "—") + (j.action === "update" ? " (avant : " + av.montant + ")" : "");
+    case "frais": return "Frais " + verbe + "s : " + nomEleveDe(cle[0]) + (j.action === "update" ? " · total " + av.total + " → " + ap.total : "");
+    case "profils": return "Rôle " + verbe + " : " + (ap.role || av.role || "?");
+    case "parents_eleves": return "Lien parent " + verbe + " : " + nomEleveDe(cle[1]);
+    case "enseignant_comptes": return "Compte enseignant " + verbe;
+    case "eleves": return "Élève supprimé : " + (av.prenom || "") + " " + (av.nom || "") + " (" + (av.matricule || "") + ")";
+    case "codes_acces": return j.action === "code_renouvele" ? "Code élève renouvelé : " + nomEleveDe(j.cible) + (d.acces_coupes ? " (accès coupés)" : "") : "Codes élèves générés : " + (d.crees || 0);
+    case "codes_enseignants": return j.action === "code_renouvele" ? "Code enseignant renouvelé" : "Codes enseignants générés : " + (d.crees || 0);
+    default:
+      if (j.action === "connexion") return "Connexion " + (d.role || "") + " (" + (d.appli || "") + ")";
+      if (j.action === "echec_code") return "Code d'accès incorrect (" + (d.type || "") + ")";
+      return j.action + (j.table_nom ? " · " + j.table_nom : "");
+  }
+}
+const FILTRES_JOURNAL = {
+  tout: () => true, notes: (j) => j.table_nom === "notes", argent: (j) => j.table_nom === "paiements" || j.table_nom === "frais",
+  acces: (j) => ["profils", "parents_eleves", "enseignant_comptes", "codes_acces", "codes_enseignants"].includes(j.table_nom),
+  connexions: (j) => j.action === "connexion" || j.action === "echec_code"
+};
+async function afficherJournal() {
+  const zone = $("journal-liste"); zone.replaceChildren();
+  const { data, error } = await sb.from("journal").select("*").order("quand", { ascending: false }).limit(300);
+  if (error) { message(/does not exist|schema cache|permission/i.test(error.message) ? "Le journal n'est pas encore activé : lance supabase_v6.sql dans Supabase." : messageErreur(error)); return; }
+  const f = FILTRES_JOURNAL[$("journal-filtre").value] || FILTRES_JOURNAL.tout;
+  const lignes60 = data.filter(f).slice(0, 60);
+  if (!lignes60.length) { zone.appendChild(el("p", "info", "Aucun événement pour ce filtre.")); return; }
+  for (const j of lignes60) {
+    const ligne = el("div", "ligne"), corps = el("div", "corps");
+    const quand = new Date(j.quand).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    corps.append(el("div", "", phraseJournal(j)), el("div", "info", quand + " · " + (j.email || "compte inconnu")));
+    ligne.appendChild(corps); zone.appendChild(ligne);
+  }
+}
+$("journal-voir").addEventListener("click", afficherJournal);
+$("journal-filtre").addEventListener("change", afficherJournal);
 
 declarerClassesDesEleves();
 $("r-nom").value = donnees.ecole.nom;

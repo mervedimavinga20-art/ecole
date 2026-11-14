@@ -6,5 +6,7 @@ window.SB_CONFIG = {
   url: "https://nktzjqolryykurawlvhp.supabase.co",
   key: "sb_publishable_tfSn74Z_xOeOW7gdz8WJWA_27jrRo2m",
   // Adresse de l'espace parents, ajoutée aux messages d'accès envoyés aux familles (calculée toute seule une fois en ligne).
-  espaceUrl: location.protocol === "https:" ? location.origin + location.pathname.replace(/[^\/]*$/, "") + "espace.html" : ""
+  espaceUrl: location.protocol === "https:" ? location.origin + location.pathname.replace(/[^\/]*$/, "") + "espace.html" : "",
+  // Adresse de l'espace enseignant, ajoutée aux messages d'accès envoyés aux enseignants.
+  enseignantUrl: location.protocol === "https:" ? location.origin + location.pathname.replace(/[^\/]*$/, "") + "enseignant.html" : ""
 };

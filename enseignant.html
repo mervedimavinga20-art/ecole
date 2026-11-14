@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net https://unpkg.com 'sha256-oZOBc7F+eu9w64Lzfm9ViS61l6cKIvbFKhHkprGCTzM=' 'sha256-CmMwnPrdThR61dsY6glCwliLw/ecQXuiksKNiibBD4o=' 'sha256-7eVPOXWeJ4F7f/CHO1cQrN/nIRCH98EIxnTFVoXHk+A='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; manifest-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<title>Espace enseignant</title>
+<script src="config.js"></script>
+<script src="commun.js"></script>
+<script src="supabase.js"></script>
+<script>window.supabase || document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.93.0/dist/umd/supabase.js"><\/script>')</script>
+<script>window.supabase || document.write('<script src="https://unpkg.com/@supabase/supabase-js@2.93.0/dist/umd/supabase.js"><\/script>')</script>
+<style>
+  :root {
+    --fond: #f2f5f6; --carte: #ffffff; --texte: #12212b; --discret: #566873; --bord: #d9e1e5;
+    --marque: #12364f; --sur-marque: #ffffff; --clair-marque: #b9cfdc;
+    --accent: #0b7a75; --accent-texte: #0a6a65; --doux: #e1f0ef;
+    --ambre: #fbefd9; --ambre-t: #8a4a00; --rouge: #fbe4e2; --rouge-t: #a11e17; --neutre: #e8edf1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fond: #0d1820; --carte: #14232e; --texte: #e6eef3; --discret: #9db0bc; --bord: #29404f;
+      --marque: #0a2233; --sur-marque: #e6eef3; --clair-marque: #9db0bc;
+      --accent: #4cc2bb; --accent-texte: #4cc2bb; --doux: #1a3340;
+      --ambre: #3a2c10; --ambre-t: #f0b04a; --rouge: #3d1f1d; --rouge-t: #f2a39d; --neutre: #1d313e;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--fond); color: var(--texte); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  #app { max-width: 560px; margin: 0 auto; min-height: 100vh; padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+  header.haut { background: var(--marque); color: var(--sur-marque); padding: 14px 20px 18px; padding-top: calc(14px + env(safe-area-inset-top, 0px)); }
+  header.haut .rang { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  header.haut .ecole { font-size: 13.5px; color: var(--clair-marque); font-weight: 600; overflow-wrap: anywhere; }
+  header.haut h1 { margin: 4px 0 0; font-size: 26px; line-height: 1.15; }
+  header.haut .sous { margin-top: 4px; font-size: 14px; color: var(--clair-marque); }
+  header.haut button { min-height: 44px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--clair-marque); background: transparent; color: var(--sur-marque); font-weight: 600; cursor: pointer; }
+  .contenu { padding: 18px 20px; display: flex; flex-direction: column; gap: 16px; }
+  .carte { background: var(--carte); border: 1px solid var(--bord); border-radius: 14px; padding: 14px 16px; }
+  .carte h2 { margin: 0 0 8px; font-size: 18px; }
+  .info { color: var(--discret); font-size: 13.5px; margin: 4px 0 0; }
+  .vide { color: var(--discret); text-align: center; padding: 18px 8px; }
+  button, input, select { font: inherit; color: inherit; }
+  button.principal { width: 100%; min-height: 48px; border: 0; border-radius: 12px; background: var(--accent); color: #fff; font-weight: 700; cursor: pointer; }
+  @media (prefers-color-scheme: dark) { button.principal { color: #06191d; } }
+  button.second { min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1.5px solid var(--accent); background: var(--carte); color: var(--accent-texte); font-weight: 700; cursor: pointer; }
+  button.danger { min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1.5px solid var(--rouge-t); background: var(--carte); color: var(--rouge-t); font-weight: 700; cursor: pointer; }
+  button.lien { background: none; border: 0; padding: 0; min-height: 44px; color: var(--accent-texte); text-decoration: underline; cursor: pointer; }
+  button:disabled { opacity: .6; }
+  input[type=text], input[type=email], input[type=password], input[type=date], select { width: 100%; min-height: 48px; padding: 0 12px; border: 1px solid var(--bord); border-radius: 10px; background: var(--carte); }
+  label.champ { display: block; font-size: 13.5px; color: var(--discret); font-weight: 600; margin-top: 10px; }
+  label.champ > input, label.champ > select { margin-top: 4px; color: var(--texte); font-weight: 400; }
+  .puces { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .puces button { min-height: 44px; padding: 0 14px; border-radius: 22px; border: 1px solid var(--bord); background: var(--carte); font-weight: 700; cursor: pointer; }
+  .puces button[aria-pressed="true"] { background: var(--marque); color: var(--sur-marque); border-color: var(--marque); }
+  .badge { display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 6px; background: var(--doux); color: var(--accent-texte); }
+  .badge.ambre { background: var(--ambre); color: var(--ambre-t); }
+  .badge.rouge { background: var(--rouge); color: var(--rouge-t); }
+  .ligne { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--bord); }
+  .ligne:first-child { border-top: 0; }
+  .ligne .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .gras { font-weight: 700; }
+  .note { width: 84px; min-height: 48px; text-align: right; padding: 0 10px; border: 1px solid var(--bord); border-radius: 10px; background: var(--carte); font-size: 17px; font-weight: 700; }
+  .note[aria-invalid="true"] { border-color: var(--rouge-t); background: var(--rouge); }
+  .sur { color: var(--discret); font-size: 13.5px; white-space: nowrap; }
+  .etat { width: 22px; text-align: center; font-weight: 800; flex: none; }
+  .etat.ok { color: var(--accent-texte); } .etat.err { color: var(--rouge-t); } .etat.att { color: var(--discret); }
+  .pres { display: flex; gap: 6px; flex: none; }
+  .pres button { min-width: 44px; min-height: 44px; border-radius: 10px; border: 1.5px solid var(--bord); background: var(--carte); font-weight: 800; cursor: pointer; }
+  .pres button[aria-pressed="true"].P { background: var(--doux); color: var(--accent-texte); border-color: var(--accent); }
+  .pres button[aria-pressed="true"].A { background: var(--rouge); color: var(--rouge-t); border-color: var(--rouge-t); }
+  .pres button[aria-pressed="true"].R { background: var(--ambre); color: var(--ambre-t); border-color: var(--ambre-t); }
+  .resume { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0 4px; }
+  .resume div { background: var(--doux); border-radius: 10px; padding: 8px; text-align: center; }
+  .resume b { display: block; font-size: 20px; }
+  .resume span { font-size: 12.5px; color: var(--discret); }
+  .tuiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .tuile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 84px; padding: 8px 4px; border-radius: 14px; background: var(--carte); border: 1px solid var(--bord); text-decoration: none; color: var(--texte); font-size: 13.5px; font-weight: 600; text-align: center; }
+  svg.i { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  .tuile svg.i { color: var(--accent-texte); }
+  nav.bas { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; background: var(--carte); border-top: 1px solid var(--bord); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  nav.bas div { max-width: 560px; margin: 0 auto; display: flex; }
+  nav.bas a { flex: 1; min-width: 0; min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 11.5px; text-decoration: none; color: var(--discret); font-weight: 500; }
+  nav.bas a[aria-current="page"] { color: var(--accent-texte); font-weight: 700; box-shadow: inset 0 3px 0 var(--accent); }
+  #msg { position: fixed; left: 16px; right: 16px; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); z-index: 9; max-width: 520px; margin: 0 auto; background: var(--marque); color: var(--sur-marque); padding: 12px 14px; border-radius: 10px; }
+  #msg[hidden] { display: none; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="msg" role="status" hidden></div>
+
+<script>
+"use strict";
+const CFG = window.SB_CONFIG;
+const PERIODES = ["1re période", "2e période", "3e période", "4e période"];
+const MOIS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
+const JOURS = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
+const INACTIVITE_MIN = 20;
+const ICONES = {
+  accueil: "M3 11l9-8 9 8M5 10v10h14V10M10 20v-6h4v6",
+  notes: "M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h7",
+  presences: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M9 15l2 2 4-4",
+  devoirs: "M5 4h14v16H5zM9 9h6M9 13h6M9 17h3"
+};
+const ONGLETS = [["accueil", "Accueil"], ["notes", "Notes"], ["presences", "Présences"], ["devoirs", "Devoirs"]];
+
+// ---------- Aides ----------
+function el(tag, cls, texte) { const n = document.createElement(tag); if (cls) n.className = cls; if (texte != null) n.textContent = texte; return n; }
+function bouton(texte, cls, fn) { const b = el("button", cls, texte); b.type = "button"; b.addEventListener("click", fn); return b; }
+function carte(titre) { const k = el("section", "carte"); if (titre) k.appendChild(el("h2", "", titre)); return k; }
+function icone(nom) {
+  const NS = "http://www.w3.org/2000/svg"; const s = document.createElementNS(NS, "svg"); s.setAttribute("class", "i"); s.setAttribute("viewBox", "0 0 24 24"); s.setAttribute("aria-hidden", "true");
+  const p = document.createElementNS(NS, "path"); p.setAttribute("d", ICONES[nom] || ""); s.appendChild(p); return s;
+}
+function puces(items, courant, fn, label) {
+  const d = el("div", "puces"); d.setAttribute("role", "group"); d.setAttribute("aria-label", label);
+  for (const [v, t] of items) { const b = bouton(t, "", () => fn(v)); b.setAttribute("aria-pressed", String(v === courant)); d.appendChild(b); }
+  return d;
+}
+function champSelect(label, options, valeur, fn) {
+  const l = el("label", "champ", label); const s = el("select");
+  for (const [v, t] of options) { const o = el("option", "", t); o.value = v; if (v === valeur) o.selected = true; s.appendChild(o); }
+  s.addEventListener("change", () => fn(s.value)); l.appendChild(s); return l;
+}
+const pad = (n) => String(n).padStart(2, "0");
+const iso = (d) => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+const aujourdhui = () => iso(new Date());
+const ilYa = (j) => { const d = new Date(); d.setDate(d.getDate() - j); return iso(d); };
+function dateFR(s) { const [a, m, j] = String(s).slice(0, 10).split("-").map(Number); const d = new Date(a, m - 1, j); return JOURS[d.getDay()] + " " + j + " " + MOIS[m - 1]; }
+const nomComplet = (x) => [x.nom, x.postnom, x.prenom].filter(Boolean).join(" ");
+const comparer = (a, b) => String(a).localeCompare(String(b), "fr", { numeric: true });
+const fmt = (v) => (v == null ? "" : String(v).replace(".", ","));
+let tMsg = 0;
+function dire(t) { const m = document.getElementById("msg"); m.textContent = t; m.hidden = false; clearTimeout(tMsg); tMsg = setTimeout(() => { m.hidden = true; }, 3500); }
+function msgErr(e) {
+  const t = String((e && e.message) || e || "");
+  if (/enseignant_comptes|ens_liste_eleves|schema cache|does not exist|Could not find/i.test(t)) return "L'espace enseignant n'est pas encore activé : l'administration doit mettre la base à jour (supabase_v6.sql).";
+  if (/row-level security|permission denied/i.test(t)) return "Action non autorisée pour ton compte.";
+  if (/dépasse le maximum/i.test(t)) return t.replace(/^.*?La note/, "La note").slice(0, 120);
+  if (/pas la tienne/i.test(t)) return "Cette matière n'est pas la tienne dans cette classe.";
+  return COMMUN.messageAuth(e);
+}
+
+// ---------- État ----------
+let sb = null, veille = null;
+const limite = COMMUN.limiteur("enseignant");
+const E = { etat: "attente", mode: "connexion", msg: "", user: null, ens: null, ecole: "", classes: [], matieres: [], eleves: [], vue: "accueil",
+  classeId: "", matiereId: "", periode: 0, date: aujourdhui(), jeton: 0, aujourdhuiFaites: {} };
+
+async function demarrer() {
+  if (!CFG || !CFG.url || !CFG.key) { E.etat = "erreur"; E.msg = "La configuration de la base est absente (config.js)."; return rendre(); }
+  if (!window.supabase) { E.etat = "erreur"; E.msg = "La bibliothèque en ligne n'a pas pu être chargée. Vérifie ta connexion Internet."; return rendre(); }
+  sb = sb || window.supabase.createClient(CFG.url, CFG.key, { auth: { persistSession: true, autoRefreshToken: true } });
+  COMMUN.ecouterRecuperation(sb, () => ouvrirSession());
+  veille = COMMUN.surveillerInactivite(INACTIVITE_MIN, async () => { if (E.user) { await sortir("Tu as été déconnecté après " + INACTIVITE_MIN + " minutes d'inactivité."); } });
+  await ouvrirSession();
+}
+async function ouvrirSession() {
+  E.etat = "attente"; rendre();
+  try {
+    const { data, error } = await sb.auth.getSession(); if (error) throw error;
+    if (!data.session) { E.etat = "connexion"; E.user = null; return rendre(); }
+    E.user = data.session.user; await chargerCompte();
+  } catch (e) { E.etat = "erreur"; E.msg = msgErr(e); rendre(); }
+}
+async function sortir(message) {
+  try { await sb.auth.signOut(); } catch (e) { /* ignoré */ }
+  Object.assign(E, { etat: "connexion", mode: "connexion", msg: message || "", user: null, ens: null, classes: [], matieres: [], eleves: [], jeton: E.jeton + 1 });
+  location.hash = "#accueil"; rendre();
+}
+async function chargerCompte() {
+  const { data: lien, error } = await sb.from("enseignant_comptes").select("enseignant_id").maybeSingle(); if (error) throw error;
+  if (!lien) { E.etat = "rattacher"; E.msg = ""; return rendre(); }
+  E.etat = "attente"; rendre();
+  const [ens, ecole, classes, matieres, eleves] = await Promise.all([
+    sb.from("enseignants").select("id, nom").maybeSingle(),
+    sb.from("ecole").select("nom").maybeSingle(),
+    sb.from("classes").select("id, nom, titulaire_id").order("nom"),
+    sb.from("matieres").select("id, classe_id, nom, maximum").order("nom"),
+    sb.rpc("ens_liste_eleves")
+  ]);
+  for (const r of [ens, ecole, classes, matieres, eleves]) if (r.error) throw r.error;
+  E.ens = ens.data || { id: lien.enseignant_id, nom: "" }; E.ecole = (ecole.data && ecole.data.nom) || "";
+  E.classes = (classes.data || []).slice().sort((a, b) => comparer(a.nom, b.nom));
+  E.matieres = (matieres.data || []).map((m) => ({ ...m, maximum: Number(m.maximum) }));
+  E.eleves = (eleves.data || []).slice().sort((a, b) => comparer(a.nom, b.nom) || comparer(a.postnom || "", b.postnom || "") || comparer(a.prenom, b.prenom));
+  E.etat = "pret"; COMMUN.noterConnexion(sb, "enseignant"); veille.reprendre();
+  const faites = {}; try { faites.n = await presencesDuJour(); } catch (e) { faites.n = null; }
+  E.aujourdhuiFaites = faites.n || {};
+  rendre();
+}
+async function presencesDuJour() {
+  const { data, error } = await sb.from("presences").select("eleve_id").eq("date", aujourdhui()); if (error) throw error;
+  const o = {}; for (const p of data || []) { const x = E.eleves.find((e) => e.id === p.eleve_id); if (x) o[x.classe_id] = (o[x.classe_id] || 0) + 1; }
+  return o;
+}
+const elevesDe = (classeId) => E.eleves.filter((x) => x.classe_id === classeId);
+const classesAvecMatiere = () => E.classes.filter((c) => E.matieres.some((m) => m.classe_id === c.id));
+const estTitulaire = (c) => c.titulaire_id === (E.ens && E.ens.id);
+
+// ---------- Rendu ----------
+function route() { const h = (location.hash || "#accueil").slice(1); return ONGLETS.some(([k]) => k === h) ? h : "accueil"; }
+window.addEventListener("hashchange", () => { if (E.etat === "pret") rendre(); });
+async function rendre() {
+  const jeton = ++E.jeton; const app = document.getElementById("app"); app.replaceChildren();
+  if (E.etat !== "pret") { ecranAcces(app); return; }
+  E.vue = route();
+  const titres = { accueil: "Bonjour" + (E.ens.nom ? " " + E.ens.nom : ""), notes: "Saisie des notes", presences: "Présences", devoirs: "Devoirs" };
+  const h = el("header", "haut"); const r = el("div", "rang");
+  r.appendChild(el("div", "ecole", (E.ecole || "École") + " · Espace enseignant"));
+  const bts = el("div"); bts.style.display = "flex"; bts.style.gap = "6px";
+  bts.append(bouton("Compte", "", () => COMMUN.ouvrirCompte(sb, { email: E.user && E.user.email, apresDeconnexion: () => sortir("Tu es déconnecté de tous tes appareils.") })), bouton("Quitter", "", () => sortir("")));
+  r.appendChild(bts); h.append(r, el("h1", "", titres[E.vue])); app.appendChild(h);
+  const c = el("main", "contenu"); app.appendChild(c);
+  const nav = el("nav", "bas"); nav.setAttribute("aria-label", "Navigation principale"); const d = el("div");
+  for (const [k, t] of ONGLETS) { const a = el("a"); a.href = "#" + k; if (k === E.vue) a.setAttribute("aria-current", "page"); a.append(icone(k), el("span", "", t)); d.appendChild(a); }
+  nav.appendChild(d); app.appendChild(nav);
+  try {
+    if (E.vue === "accueil") vueAccueil(c);
+    else if (E.vue === "notes") await vueNotes(c, jeton);
+    else if (E.vue === "presences") await vuePresences(c, jeton);
+    else await vueDevoirs(c, jeton);
+  } catch (e) { if (jeton === E.jeton) { c.appendChild(el("p", "vide", "Chargement impossible : " + msgErr(e))); } }
+}
+
+function ecranAcces(app) {
+  const c = el("main", "contenu"); c.style.paddingTop = "48px"; c.appendChild(el("h1", "", "Espace enseignant"));
+  if (E.etat === "attente") { c.appendChild(el("p", "vide", "Chargement…")); app.appendChild(c); return; }
+  if (E.etat === "erreur") {
+    const k = carte("Connexion impossible"); k.appendChild(el("p", "info", E.msg));
+    const b = bouton("Réessayer", "principal", () => demarrer()); b.style.marginTop = "10px"; k.appendChild(b); c.appendChild(k); app.appendChild(c); return;
+  }
+  if (E.etat === "rattacher") {
+    const k = carte("Entre ton code enseignant");
+    k.appendChild(el("p", "info", "L'administration t'a remis un code personnel de 12 caractères. Tu ne le saisis qu'une fois."));
+    const cd = el("input"); cd.type = "text"; cd.autocapitalize = "characters"; cd.autocomplete = "off"; cd.setAttribute("aria-label", "Code enseignant"); cd.placeholder = "Code enseignant"; cd.style.margin = "10px 0";
+    const err = el("p", "info", E.msg || ""); err.setAttribute("role", "alert");
+    const ok = bouton("Valider", "principal", async () => {
+      if (!cd.value.trim()) { err.textContent = "Écris ton code."; return; }
+      ok.disabled = true; err.textContent = "Vérification…";
+      try {
+        const { data, error } = await sb.rpc("rattacher_enseignant", { p_code: cd.value });
+        if (error) { ok.disabled = false; err.textContent = msgErr(error); return; }
+        if (!data) { ok.disabled = false; err.textContent = "Code incorrect."; return; }
+        await chargerCompte();
+      } catch (e) { ok.disabled = false; err.textContent = msgErr(e); }
+    });
+    cd.addEventListener("keydown", (e) => { if (e.key === "Enter") ok.click(); });
+    k.append(cd, err, ok); c.appendChild(k); c.appendChild(bouton("Se déconnecter", "second", () => sortir(""))); app.appendChild(c); return;
+  }
+  const creer = E.mode === "creer";
+  const k = carte(creer ? "Créer mon compte" : "Connexion");
+  k.appendChild(puces([["connexion", "Connexion"], ["creer", "Créer un compte"]], E.mode, (v) => { E.mode = v; E.msg = ""; rendre(); }, "Choix"));
+  const em = el("input"); em.type = "email"; em.autocomplete = "username"; em.setAttribute("aria-label", "Email"); em.placeholder = "Email";
+  const mdp = el("input"); mdp.type = "password"; mdp.autocomplete = creer ? "new-password" : "current-password"; mdp.setAttribute("aria-label", "Mot de passe"); mdp.placeholder = creer ? "Mot de passe (8 caractères, lettres et chiffres)" : "Mot de passe";
+  em.style.margin = "12px 0 8px"; mdp.style.marginBottom = "10px";
+  const err = el("p", "info", E.msg || ""); err.setAttribute("role", "alert");
+  const ok = bouton(creer ? "Créer mon compte" : "Se connecter", "principal", async () => {
+    if (!em.value.trim() || !mdp.value) { err.textContent = "Écris ton email et ton mot de passe."; return; }
+    const att = limite.attente(); if (att) { err.textContent = "Trop d'essais. Réessaie dans " + att + " secondes."; return; }
+    if (creer) { const pb = COMMUN.verifierMotDePasse(mdp.value); if (pb) { err.textContent = pb; return; } }
+    ok.disabled = true; err.textContent = "Un instant…";
+    try {
+      const r = creer ? await sb.auth.signUp({ email: em.value.trim(), password: mdp.value }) : await sb.auth.signInWithPassword({ email: em.value.trim(), password: mdp.value });
+      if (r.error) { ok.disabled = false; if (!creer) limite.echec(); err.textContent = msgErr(r.error); return; }
+      limite.succes();
+      if (!r.data.session) { ok.disabled = false; err.textContent = "Compte créé. Confirme ton email avec le lien reçu, puis connecte-toi."; E.mode = "connexion"; return; }
+      E.user = r.data.session.user; await chargerCompte();
+    } catch (e) { ok.disabled = false; err.textContent = msgErr(e); }
+  });
+  mdp.addEventListener("keydown", (e) => { if (e.key === "Enter") ok.click(); });
+  k.append(em, mdp, err, ok);
+  if (!creer) { const o = bouton("Mot de passe oublié ?", "lien", async () => { err.textContent = "Un instant…"; err.textContent = await COMMUN.motDePasseOublie(sb, em.value); }); o.style.marginTop = "6px"; k.appendChild(o); }
+  c.appendChild(k); app.appendChild(c);
+}
+
+// ---------- Accueil ----------
+function vueAccueil(c) {
+  const k = carte("Mes classes");
+  if (!E.classes.length) { k.appendChild(el("p", "vide", "Aucune classe ne t'est attribuée pour le moment. Demande à l'administration de t'attribuer tes matières et ta classe.")); c.appendChild(k); return; }
+  for (const cl of E.classes) {
+    const l = el("div", "ligne"); const g = el("div", "grow");
+    const mats = E.matieres.filter((m) => m.classe_id === cl.id).map((m) => m.nom);
+    g.appendChild(el("div", "gras", cl.nom + (estTitulaire(cl) ? " · titulaire" : "")));
+    g.appendChild(el("div", "info", (mats.length ? mats.join(", ") : "Pas de matière") + " · " + elevesDe(cl.id).length + " élève(s)"));
+    const n = elevesDe(cl.id).length, fait = E.aujourdhuiFaites[cl.id] || 0;
+    const b = el("span", "badge" + (fait >= n && n ? "" : " ambre"), fait >= n && n ? "Présences prises" : "Présences : " + fait + "/" + n);
+    l.append(g, b); k.appendChild(l);
+  }
+  c.appendChild(k);
+  const t = el("div", "tuiles");
+  for (const [k2, lib] of [["notes", "Saisir les notes"], ["presences", "Prendre les présences"], ["devoirs", "Donner un devoir"]]) { const a = el("a", "tuile"); a.href = "#" + k2; a.append(icone(k2), el("span", "", lib)); t.appendChild(a); }
+  c.appendChild(t);
+  const i = carte("Ce que tu peux faire ici"); i.appendChild(el("p", "info", "Tu vois seulement tes classes et tes matières. Les frais, les messages des familles et les téléphones des parents restent réservés à l'administration. Chaque note que tu enregistres est notée dans un journal de sécurité."));
+  c.appendChild(i);
+}
+
+// ---------- Notes ----------
+async function vueNotes(c, jeton) {
+  const cls = classesAvecMatiere();
+  if (!cls.length) { const k = carte(); k.appendChild(el("p", "vide", "Aucune matière ne t'est attribuée. L'administration doit t'attribuer tes matières (page Classes).")); c.appendChild(k); return; }
+  if (!cls.some((x) => x.id === E.classeId)) E.classeId = cls[0].id;
+  const mats = E.matieres.filter((m) => m.classe_id === E.classeId);
+  if (!mats.some((m) => m.id === E.matiereId)) E.matiereId = mats[0].id;
+  const m = mats.find((x) => x.id === E.matiereId);
+  const k = carte("Choisis la classe");
+  k.appendChild(champSelect("Classe", cls.map((x) => [x.id, x.nom]), E.classeId, (v) => { E.classeId = v; rendre(); }));
+  if (mats.length > 1) k.appendChild(champSelect("Matière", mats.map((x) => [x.id, x.nom + " (sur " + fmt(x.maximum) + ")"]), E.matiereId, (v) => { E.matiereId = v; rendre(); }));
+  k.appendChild(puces(PERIODES.map((t, i) => [i, t]), E.periode, (v) => { E.periode = v; rendre(); }, "Période"));
+  c.appendChild(k);
+  const zone = carte(m.nom + " · sur " + fmt(m.maximum)); c.appendChild(zone);
+  const { data, error } = await sb.from("notes").select("eleve_id, valeur").eq("matiere_id", m.id).eq("periode", E.periode);
+  if (jeton !== E.jeton) return;
+  if (error) throw error;
+  const valeurs = new Map((data || []).map((n) => [n.eleve_id, Number(n.valeur)]));
+  const eleves = elevesDe(E.classeId);
+  if (!eleves.length) { zone.appendChild(el("p", "vide", "Aucun élève dans cette classe.")); return; }
+  const resume = el("p", "info"); resume.setAttribute("aria-live", "polite");
+  const maj = () => { const v = [...valeurs.values()]; resume.textContent = v.length + " note(s) sur " + eleves.length + (v.length ? " · moyenne " + fmt(Math.round(v.reduce((s, x) => s + x, 0) / v.length * 100) / 100) + " / " + fmt(m.maximum) : "") + " · " + PERIODES[E.periode]; };
+  maj(); zone.appendChild(resume);
+  const echecs = new Set(); const relancer = bouton("Réessayer les notes non enregistrées", "second", () => { for (const f of [...echecs]) f(); }); relancer.hidden = true; relancer.style.marginTop = "8px";
+  const entrees = [];
+  eleves.forEach((x, idx) => {
+    const l = el("div", "ligne"); const g = el("div", "grow"); g.appendChild(el("div", "gras", nomComplet(x))); g.appendChild(el("div", "info", x.matricule));
+    const saisie = el("input", "note"); saisie.type = "text"; saisie.inputMode = "decimal"; saisie.autocomplete = "off"; saisie.enterKeyHint = "next";
+    saisie.setAttribute("aria-label", "Note de " + nomComplet(x) + " sur " + fmt(m.maximum)); saisie.value = fmt(valeurs.get(x.id));
+    const sur = el("span", "sur", "/ " + fmt(m.maximum)); const etat = el("span", "etat"); etat.setAttribute("aria-live", "polite");
+    const marque = (cls2, t) => { etat.className = "etat " + cls2; etat.textContent = t; };
+    async function enregistrer() {
+      const brut = saisie.value.trim().replace(/\s/g, "").replace(",", ".");
+      const ancien = valeurs.has(x.id) ? valeurs.get(x.id) : null;
+      echecs.delete(enregistrer); relancer.hidden = !echecs.size;
+      if (brut === "") { saisie.removeAttribute("aria-invalid"); if (ancien == null) { marque("", ""); return; } }
+      let v = null;
+      if (brut !== "") {
+        v = Number(brut);
+        if (!Number.isFinite(v) || v < 0 || v > m.maximum) { saisie.setAttribute("aria-invalid", "true"); marque("err", "!"); dire("La note doit être entre 0 et " + fmt(m.maximum) + "."); return; }
+        saisie.removeAttribute("aria-invalid");
+        if (ancien === v) { marque("ok", "✓"); return; }
+      }
+      marque("att", "…");
+      try {
+        let r;
+        if (v == null) r = await sb.from("notes").delete().match({ eleve_id: x.id, matiere_id: m.id, periode: E.periode });
+        else r = await sb.from("notes").upsert({ eleve_id: x.id, matiere_id: m.id, periode: E.periode, valeur: v }, { onConflict: "eleve_id,matiere_id,periode" });
+        if (r.error) throw r.error;
+        if (v == null) valeurs.delete(x.id); else valeurs.set(x.id, v);
+        marque("ok", "✓"); maj();
+      } catch (e) { echecs.add(enregistrer); relancer.hidden = false; marque("err", "!"); dire("Non enregistré : " + msgErr(e)); }
+    }
+    saisie.addEventListener("change", enregistrer);
+    saisie.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); const s = entrees[idx + 1]; if (s) s.focus(); else saisie.blur(); } });
+    if (valeurs.has(x.id)) marque("ok", "✓");
+    entrees.push(saisie); l.append(g, saisie, sur, etat); zone.appendChild(l);
+  });
+  zone.appendChild(relancer);
+}
+
+// ---------- Présences ----------
+async function vuePresences(c, jeton) {
+  if (!E.classes.length) { const k = carte(); k.appendChild(el("p", "vide", "Aucune classe ne t'est attribuée.")); c.appendChild(k); return; }
+  if (!E.classes.some((x) => x.id === E.classeId)) E.classeId = E.classes[0].id;
+  const k = carte("Choisis la classe et la date");
+  k.appendChild(champSelect("Classe", E.classes.map((x) => [x.id, x.nom]), E.classeId, (v) => { E.classeId = v; rendre(); }));
+  const ld = el("label", "champ", "Date"); const di = el("input"); di.type = "date"; di.min = ilYa(60); di.max = aujourdhui(); di.value = E.date;
+  di.addEventListener("change", () => { if (di.value && di.value >= di.min && di.value <= di.max) { E.date = di.value; rendre(); } else { di.value = E.date; dire("Choisis une date des 60 derniers jours."); } });
+  ld.appendChild(di); k.appendChild(ld); c.appendChild(k);
+  const zone = carte(dateFR(E.date)); c.appendChild(zone);
+  const eleves = elevesDe(E.classeId);
+  const { data, error } = await sb.from("presences").select("eleve_id, statut").eq("date", E.date);
+  if (jeton !== E.jeton) return;
+  if (error) throw error;
+  const st = new Map((data || []).filter((p) => eleves.some((x) => x.id === p.eleve_id)).map((p) => [p.eleve_id, p.statut]));
+  if (!eleves.length) { zone.appendChild(el("p", "vide", "Aucun élève dans cette classe.")); return; }
+  const resume = el("div", "resume"); resume.setAttribute("aria-live", "polite"); zone.appendChild(resume);
+  const maj = () => { resume.replaceChildren(); for (const [code, lib] of [["P", "Présents"], ["A", "Absents"], ["R", "Retards"]]) { const d = el("div"); d.append(el("b", "", String([...st.values()].filter((s) => s === code).length)), el("span", "", lib)); resume.appendChild(d); } };
+  maj();
+  const lignes = new Map();
+  async function fixer(x, code) {
+    const ancien = st.get(x.id); st.set(x.id, code); dessiner(x.id); maj();
+    const { error: er } = await sb.from("presences").upsert({ eleve_id: x.id, date: E.date, statut: code }, { onConflict: "eleve_id,date" });
+    if (er) { if (ancien) st.set(x.id, ancien); else st.delete(x.id); dessiner(x.id); maj(); dire("Non enregistré : " + msgErr(er)); }
+  }
+  function dessiner(id) { const bs = lignes.get(id); const s = st.get(id); for (const b of bs) b.setAttribute("aria-pressed", String(b.dataset.code === s)); }
+  const tous = bouton("Marquer présents ceux qui ne sont pas encore marqués", "second", async () => {
+    const restants = eleves.filter((x) => !st.has(x.id)); if (!restants.length) { dire("Tous les élèves sont déjà marqués."); return; }
+    tous.disabled = true;
+    const { error: er } = await sb.from("presences").upsert(restants.map((x) => ({ eleve_id: x.id, date: E.date, statut: "P" })), { onConflict: "eleve_id,date" });
+    tous.disabled = false;
+    if (er) { dire("Non enregistré : " + msgErr(er)); return; }
+    for (const x of restants) { st.set(x.id, "P"); dessiner(x.id); } maj();
+  });
+  tous.style.width = "100%"; tous.style.margin = "6px 0"; zone.appendChild(tous);
+  for (const x of eleves) {
+    const l = el("div", "ligne"); const g = el("div", "grow"); g.appendChild(el("div", "gras", nomComplet(x)));
+    const p = el("div", "pres"); p.setAttribute("role", "group"); p.setAttribute("aria-label", "Présence de " + nomComplet(x)); const bs = [];
+    for (const [code, lib] of [["P", "Présent"], ["A", "Absent"], ["R", "Retard"]]) {
+      const b = bouton(code, code, () => fixer(x, code)); b.dataset.code = code; b.setAttribute("aria-label", lib + " : " + nomComplet(x)); b.setAttribute("aria-pressed", String(st.get(x.id) === code)); bs.push(b); p.appendChild(b);
+    }
+    lignes.set(x.id, bs); l.append(g, p); zone.appendChild(l);
+  }
+  zone.appendChild(el("p", "info", "P = présent · A = absent · R = retard. Tu peux corriger les 60 derniers jours."));
+}
+
+// ---------- Devoirs ----------
+async function vueDevoirs(c, jeton) {
+  if (!E.classes.length) { const k = carte(); k.appendChild(el("p", "vide", "Aucune classe ne t'est attribuée.")); c.appendChild(k); return; }
+  if (!E.classes.some((x) => x.id === E.classeId)) E.classeId = E.classes[0].id;
+  const cl = E.classes.find((x) => x.id === E.classeId);
+  const mats = E.matieres.filter((m) => m.classe_id === cl.id);
+  const k = carte("Donner un devoir");
+  k.appendChild(champSelect("Classe", E.classes.map((x) => [x.id, x.nom]), E.classeId, (v) => { E.classeId = v; rendre(); }));
+  let matiereSel = mats[0] ? mats[0].nom : "";
+  if (mats.length) k.appendChild(champSelect("Matière", mats.map((m) => [m.nom, m.nom]), matiereSel, (v) => { matiereSel = v; }));
+  let libre = null;
+  if (estTitulaire(cl)) { const l = el("label", "champ", mats.length ? "Ou une autre matière (titulaire)" : "Matière (titulaire)"); libre = el("input"); libre.type = "text"; libre.maxLength = 60; l.appendChild(libre); k.appendChild(l); }
+  const lt = el("label", "champ", "Devoir à faire"); const titre = el("input"); titre.type = "text"; titre.maxLength = 140; titre.placeholder = "ex. Exercices 3 à 6, page 42"; lt.appendChild(titre); k.appendChild(lt);
+  const ld = el("label", "champ", "Pour le"); const pour = el("input"); pour.type = "date"; pour.min = aujourdhui(); const dem = new Date(); dem.setDate(dem.getDate() + 1); pour.value = iso(dem); ld.appendChild(pour); k.appendChild(ld);
+  const err = el("p", "info"); err.setAttribute("role", "alert"); err.style.margin = "8px 0";
+  const ajouter = bouton("Publier le devoir", "principal", async () => {
+    const mat = (libre && libre.value.trim()) || matiereSel; const t = titre.value.trim();
+    if (!mat) { err.textContent = "Aucune matière : demande à l'administration de t'en attribuer une."; return; }
+    if (!t) { err.textContent = "Écris le devoir à faire."; return; }
+    if (!pour.value || pour.value < aujourdhui()) { err.textContent = "Choisis une date à partir d'aujourd'hui."; return; }
+    ajouter.disabled = true; err.textContent = "Envoi…";
+    const { error } = await sb.from("devoirs").insert({ classe_id: cl.id, matiere: mat, titre: t, pour: pour.value, prof: E.ens.nom || "" });
+    ajouter.disabled = false;
+    if (error) { err.textContent = msgErr(error); return; }
+    dire("Devoir publié : les parents le verront."); rendre();
+  });
+  k.append(err, ajouter); c.appendChild(k);
+  const liste = carte("Devoirs de " + cl.nom); c.appendChild(liste);
+  const { data, error } = await sb.from("devoirs").select("id, matiere, titre, pour, prof").eq("classe_id", cl.id).order("pour", { ascending: false });
+  if (jeton !== E.jeton) return;
+  if (error) throw error;
+  const mine = (data || []).slice(0, 40);
+  if (!mine.length) { liste.appendChild(el("p", "vide", "Aucun devoir pour cette classe.")); return; }
+  for (const d of mine) {
+    const l = el("div", "ligne"); const g = el("div", "grow");
+    g.appendChild(el("div", "gras", d.matiere + " · " + d.titre)); g.appendChild(el("div", "info", "Pour le " + dateFR(d.pour) + (d.prof ? " · " + d.prof : "")));
+    l.appendChild(g);
+    if (d.prof && d.prof === E.ens.nom) l.appendChild(bouton("Supprimer", "danger", async () => {
+      if (!confirm("Supprimer ce devoir ?")) return;
+      const { error: er } = await sb.from("devoirs").delete().eq("id", d.id); if (er) { dire("Suppression impossible : " + msgErr(er)); return; } rendre();
+    }));
+    liste.appendChild(l);
+  }
+}
+
+window.addEventListener("error", (e) => { const m = document.getElementById("msg"); m.textContent = "Erreur : " + e.message; m.hidden = false; });
+demarrer();
+</script>
+</body>
+</html>

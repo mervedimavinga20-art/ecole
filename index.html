@@ -2,6 +2,8 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; manifest-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none'">
+<meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>École · Accueil</title>
 <style>
@@ -22,8 +24,9 @@
   <h1>Gestion de l'école</h1>
   <p>Choisis ton espace.</p>
   <a class="choix" href="admin.html"><b>Administration</b><span>Élèves, classes, notes, présences, frais, devoirs, messages, horaire, calendrier.</span></a>
+  <a class="choix" href="enseignant.html"><b>Espace enseignant</b><span>Saisir les notes, les présences et les devoirs de tes classes.</span></a>
   <a class="choix" href="espace.html"><b>Espace élèves et parents</b><span>Notes, présences, frais, devoirs, messages et documents d'un élève.</span></a>
-  <p style="font-size:13.5px">Les deux applications partagent les données de ce téléphone. Pour qu'elles se voient, ouvre-les par ce même dossier, avec le même navigateur.</p>
+  <p style="font-size:13.5px">Les données en ligne sont protégées par des règles dans la base : chaque personne ne voit que ce qui la concerne.</p>
 </main>
 </body>
 </html>
